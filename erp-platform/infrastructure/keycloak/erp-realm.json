@@ -1,0 +1,20 @@
+{
+  "realm": "erp",
+  "enabled": true,
+  "sslRequired": "external",
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 28800,
+  "passwordPolicy": "length(12) and notUsername",
+  "clients": [
+    {
+      "clientId": "erp-bff", "enabled": true, "publicClient": false, "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false, "implicitFlowEnabled": false,
+      "attributes": {"pkce.code.challenge.method": "S256"},
+      "redirectUris": [], "webOrigins": []
+    },
+    {"clientId": "erp-identity-admin", "enabled": true, "publicClient": false, "serviceAccountsEnabled": true,
+     "standardFlowEnabled": false, "directAccessGrantsEnabled": false}
+  ]
+}

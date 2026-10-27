@@ -1,0 +1,77 @@
+"""URLs served on tenant hosts (<slug>.<base-domain>). Platform endpoints are NOT routable here."""
+from django.urls import path
+
+from platform_core.identity import views as auth_views
+from platform_core.organizations import views as o
+from shared.events import views as ev
+from shared.notifications import views as nt
+from shared.workflows import views as wf
+from shared.files import views as fl
+from platform_core.tenant_api import views as t
+from shared.api.health import healthz, readyz
+
+urlpatterns = [
+    path("healthz", healthz),
+    path("readyz", readyz),
+    path("auth/login", auth_views.login_view),
+    path("auth/callback", auth_views.callback_view),
+    path("auth/logout", auth_views.logout_view),
+    path("auth/csrf", auth_views.csrf_view),
+    path("api/v1/me", t.Me.as_view()),
+    path("api/v1/users", t.UserList.as_view()),
+    path("api/v1/users/invite", t.UserInvite.as_view()),
+    path("api/v1/users/<uuid:membership_id>/deactivate", t.UserDeactivate.as_view()),
+    path("api/v1/users/<uuid:membership_id>/reactivate", t.UserReactivate.as_view()),
+    path("api/v1/roles", t.RoleListCreate.as_view()),
+    path("api/v1/role-assignments", t.AssignmentCreate.as_view()),
+    path("api/v1/role-assignments/<uuid:assignment_id>", t.AssignmentRevoke.as_view()),
+    path("api/v1/modules", t.ModuleList.as_view()),
+    path("api/v1/audit-events", t.AuditList.as_view()),
+    path("api/v1/org/company", o.CompanyView.as_view()),
+    path("api/v1/org/departments", o.DepartmentList.as_view()),
+    path("api/v1/org/departments/<uuid:pk>", o.DepartmentDetail.as_view()),
+    path("api/v1/org/teams", o.TeamList.as_view()),
+    path("api/v1/org/teams/<uuid:pk>", o.TeamDetail.as_view()),
+    path("api/v1/org/positions", o.PositionList.as_view()),
+    path("api/v1/org/positions/<uuid:pk>", o.PositionDetail.as_view()),
+    path("api/v1/org/cost-centers", o.CostCenterList.as_view()),
+    path("api/v1/org/cost-centers/<uuid:pk>", o.CostCenterDetail.as_view()),
+    path("api/v1/org/business-units", o.BusinessUnitList.as_view()),
+    path("api/v1/org/business-units/<uuid:pk>", o.BusinessUnitDetail.as_view()),
+    path("api/v1/org/branches", o.BranchList.as_view()),
+    path("api/v1/org/branches/<uuid:pk>", o.BranchDetail.as_view()),
+    path("api/v1/org/legal-entities", o.LegalEntityList.as_view()),
+    path("api/v1/org/legal-entities/<uuid:pk>", o.LegalEntityDetail.as_view()),
+    path("api/v1/org/currencies", o.CurrencyList.as_view()),
+    path("api/v1/org/currencies/<str:code>", o.CurrencyActivation.as_view()),
+    path("api/v1/org/exchange-rates", o.ExchangeRates.as_view()),
+    path("api/v1/org/fiscal-years", o.FiscalYears.as_view()),
+    path("api/v1/org/fiscal-periods/<uuid:pk>/close", o.PeriodClose.as_view()),
+    path("api/v1/org/fiscal-periods/<uuid:pk>/reopen", o.PeriodReopen.as_view()),
+    path("api/v1/org/holidays", o.Holidays.as_view()),
+    path("api/v1/org/members", o.MemberProfiles.as_view()),
+    path("api/v1/org/members/<uuid:user_id>/profile", o.MemberProfile.as_view()),
+    path("api/v1/settings", o.Settings.as_view()),
+    path("api/v1/notifications", nt.NotificationList.as_view()),
+    path("api/v1/notifications/read-all", nt.NotificationReadAll.as_view()),
+    path("api/v1/notifications/<uuid:pk>/read", nt.NotificationRead.as_view()),
+    path("api/v1/notification-preferences", nt.Preferences.as_view()),
+    path("api/v1/events", ev.EventList.as_view()),
+    path("api/v1/events/<uuid:pk>/retry", ev.EventRetry.as_view()),
+    path("api/v1/sequences", o.Sequences.as_view()),
+    path("api/v1/sequences/<slug:code>", o.SequenceDetail.as_view()),
+    path("api/v1/workflows/definitions", wf.Definitions.as_view()),
+    path("api/v1/workflows/subject-types", wf.SubjectTypes.as_view()),
+    path("api/v1/workflows/inbox", wf.Inbox.as_view()),
+    path("api/v1/workflows/instances", wf.Instances.as_view()),
+    path("api/v1/workflows/instances/<uuid:pk>", wf.InstanceDetail.as_view()),
+    path("api/v1/workflows/instances/<uuid:pk>/resubmit", wf.InstanceResubmit.as_view()),
+    path("api/v1/workflows/instances/<uuid:pk>/cancel", wf.InstanceCancel.as_view()),
+    path("api/v1/workflows/tasks/<uuid:pk>/decide", wf.TaskDecide.as_view()),
+    path("api/v1/workflows/tasks/<uuid:pk>/delegate", wf.TaskDelegate.as_view()),
+    path("api/v1/files", fl.FileListCreate.as_view()),
+    path("api/v1/files/download/<str:token>", fl.FileLinkRedeem.as_view()),
+    path("api/v1/files/<uuid:pk>", fl.FileDetail.as_view()),
+    path("api/v1/files/<uuid:pk>/content", fl.FileContent.as_view()),
+    path("api/v1/files/<uuid:pk>/link", fl.FileLink.as_view()),
+]
