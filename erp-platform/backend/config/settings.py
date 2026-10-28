@@ -68,6 +68,11 @@ TENANT_APPS = [
     "shared.notifications",
     "shared.workflows",
     "shared.files",
+    "modules.finance",
+    "modules.inventory",
+    "modules.procurement",
+    "modules.crm",
+    "modules.sales",
 ]
 INSTALLED_APPS = list(SHARED_APPS) + [a for a in TENANT_APPS if a not in SHARED_APPS]
 

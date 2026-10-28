@@ -433,6 +433,10 @@ SETTINGS_SCHEMA = {
     "locale.timezone": (lambda v: isinstance(v, str) and 1 <= len(v) <= 64, "UTC"),
     "locale.date_format": (lambda v: v in ("YYYY-MM-DD", "DD/MM/YYYY", "MM/DD/YYYY"), "YYYY-MM-DD"),
     "notifications.email_enabled": (_is_bool, True),
+    "procurement.match_tolerance_percent": (lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 20, 2),
+    "sales.max_discount_percent": (lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 100, 10),
+    "sales.approval_threshold": (lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 1000000000000, 10000),
+    "sales.payment_terms_days": (_is_int_range(0, 365), 30),
     "workflow.default_due_hours": (_is_int_range(1, 24 * 30), 72),
 }
 

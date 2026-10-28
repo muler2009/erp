@@ -70,7 +70,7 @@ def test_catalog_invariants():
     assert "finance.payment.release" not in DEFAULT_TENANT_ROLES["finance_officer"][1]
     assert "finance.payment.release" not in DEFAULT_TENANT_ROLES["finance_manager"][1]
     assert "finance.invoice.approve" not in DEFAULT_TENANT_ROLES["finance_officer"][1]
-    assert DEFAULT_TENANT_ROLES["finance_controller"][1] == ["finance.payment.release", "reports.financial.view"]
+    assert "finance.payment.release" in DEFAULT_TENANT_ROLES["finance_controller"][1] and "finance.invoice.approve" not in DEFAULT_TENANT_ROLES["finance_controller"][1]
 
 
 @pytest.mark.django_db

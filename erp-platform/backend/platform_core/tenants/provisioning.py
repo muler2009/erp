@@ -205,6 +205,12 @@ def step_seed_defaults(job, tenant):
         authz.seed_roles()
         org.seed_defaults(tenant)
         sequences.seed_default_sequences()
+        from modules.finance import services as finance
+
+        finance.seed_defaults()
+        from modules.crm import services as crm
+
+        crm.seed_defaults()
 
 
 def apply_plan_entitlements(tenant, *, enable_new=True):
