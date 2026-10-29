@@ -73,6 +73,7 @@ TENANT_APPS = [
     "modules.procurement",
     "modules.crm",
     "modules.sales",
+    "modules.hr",
 ]
 INSTALLED_APPS = list(SHARED_APPS) + [a for a in TENANT_APPS if a not in SHARED_APPS]
 
@@ -198,6 +199,7 @@ CELERY_BEAT_SCHEDULE = {
     "relay-outboxes": {"task": "events.relay_all", "schedule": 15.0},
     "purge-deleted-files": {"task": "files.purge_all", "schedule": 86400},
     "escalate-overdue-approvals": {"task": "workflows.escalate_all", "schedule": 300.0},
+    "hr-daily": {"task": "hr.daily_all", "schedule": 86400},
 }
 
 # ---------------------------------------------------------------- events / files

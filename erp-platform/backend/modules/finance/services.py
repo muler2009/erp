@@ -42,6 +42,10 @@ DEFAULT_ACCOUNTS = [  # code, name, type, parent code, postable, control, system
     ("1200", "Inventory", "ASSET", "1000", True, False, "inventory"),
     ("2200", "Goods Received Not Invoiced", "LIABILITY", "2000", True, False, "grni"),
     ("5400", "Inventory Adjustments", "EXPENSE", "5000", True, False, "inventory_adjustment"),
+    ("2400", "Payroll Payable", "LIABILITY", "2000", True, False, "payroll_payable"),
+    ("2410", "Payroll Tax and Deductions Payable", "LIABILITY", "2000", True, False, "payroll_tax_payable"),
+    ("2420", "Pension Payable", "LIABILITY", "2000", True, False, "pension_payable"),
+    ("5300", "Salaries and Wages", "EXPENSE", "5000", True, False, "salary_expense"),
     ("5900", "Foreign Exchange Gain/Loss", "EXPENSE", "5000", True, False, "fx_gain_loss"),
 ]
 

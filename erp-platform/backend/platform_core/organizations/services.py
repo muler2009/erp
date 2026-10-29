@@ -437,6 +437,11 @@ SETTINGS_SCHEMA = {
     "sales.max_discount_percent": (lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 100, 10),
     "sales.approval_threshold": (lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 1000000000000, 10000),
     "sales.payment_terms_days": (_is_int_range(0, 365), 30),
+    "hr.pension_employee_percent": (lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 50, 7),
+    "hr.pension_employer_percent": (lambda v: isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v <= 50, 11),
+    "hr.enforce_headcount": (_is_bool, False),
+    "hr.retirement_age": (_is_int_range(40, 80), 60),
+    "hr.probation_months": (_is_int_range(0, 12), 3),
     "workflow.default_due_hours": (_is_int_range(1, 24 * 30), 72),
 }
 

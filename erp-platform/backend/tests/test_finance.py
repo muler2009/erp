@@ -438,8 +438,8 @@ def test_api_journal_and_account_rules(api_env):
     assert api["officer"].post("/api/v1/finance/accounts", {"code": "6000", "name": "X", "type": "EXPENSE"}).status_code == 403
     with schema_context("t_acme"):
         parent = m.Account.objects.get(code="5000")
-    assert api["mgr"].post("/api/v1/finance/accounts", {"code": "5300", "name": "Travel", "type": "EXPENSE", "parent": str(parent.id)}).status_code == 201
-    assert api["mgr"].post("/api/v1/finance/accounts", {"code": "5300", "name": "Dup", "type": "EXPENSE"}).status_code == 409
+    assert api["mgr"].post("/api/v1/finance/accounts", {"code": "5700", "name": "Travel", "type": "EXPENSE", "parent": str(parent.id)}).status_code == 201
+    assert api["mgr"].post("/api/v1/finance/accounts", {"code": "5700", "name": "Dup", "type": "EXPENSE"}).status_code == 409
     with schema_context("t_acme"):
         ctl = m.Account.objects.get(system_key="ar_control")
     assert api["mgr"].patch(f"/api/v1/finance/accounts/{ctl.id}", {"is_active": False}).status_code == 409

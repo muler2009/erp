@@ -211,6 +211,12 @@ def step_seed_defaults(job, tenant):
         from modules.crm import services as crm
 
         crm.seed_defaults()
+        from modules.hr import services as hr
+
+        hr.seed_defaults()
+        from modules.hr import attendance as hr_attendance
+
+        hr_attendance.seed_defaults()
 
 
 def apply_plan_entitlements(tenant, *, enable_new=True):
