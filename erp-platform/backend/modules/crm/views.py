@@ -29,23 +29,23 @@ def _date(v, field):
 
 
 def _account(a):
-    return {"id": str(a.id), "name": a.name, "industry": a.industry, "segment": a.segment, "owner_id": str(a.owner_id), "is_active": a.is_active, "partner": _s(a.partner_id)}
+    return {"id": str(a.id), "name": a.name, "industry": a.industry, "segment": a.segment, "owner_id": str(a.owner_id), "is_active": a.is_active, "partner": _s(a.partner_id), "website": a.website, "tax_id": a.tax_id, "customer_type": a.customer_type, "parent": _s(a.parent_id), "classification": a.classification, "lifecycle_stage": a.lifecycle_stage, "credit_status": a.credit_status, "credit_limit": _s(a.credit_limit), "restriction_note": a.restriction_note, "preferred_channel": a.preferred_channel, "language": a.language}
 
 
 def _contact(c):
-    return {"id": str(c.id), "account": _s(c.account_id), "first_name": c.first_name, "last_name": c.last_name, "email": c.email, "phone": c.phone, "job_title": c.job_title}
+    return {"id": str(c.id), "account": _s(c.account_id), "first_name": c.first_name, "last_name": c.last_name, "email": c.email, "phone": c.phone, "job_title": c.job_title, "role": c.role, "preferred_channel": c.preferred_channel, "consent": {"email": c.consent_email, "phone": c.consent_phone, "sms": c.consent_sms, "opted_out": c.opted_out_at is not None}}
 
 
 def _lead(l):
-    return {"id": str(l.id), "name": l.name, "company": l.company, "email": l.email, "status": l.status, "source": l.source, "owner_id": _s(l.owner_id), "converted_opportunity": _s(l.converted_opportunity_id), "converted_account": _s(l.converted_account_id)}
+    return {"id": str(l.id), "name": l.name, "company": l.company, "email": l.email, "status": l.status, "source": l.source, "owner_id": _s(l.owner_id), "converted_opportunity": _s(l.converted_opportunity_id), "converted_account": _s(l.converted_account_id), "phone": l.phone, "priority": l.priority, "qualification": l.qualification, "industry": l.industry, "interests": l.interests, "budget": _s(l.budget), "potential_value": _s(l.potential_value), "currency": l.currency, "follow_up_date": _s(l.follow_up_date), "merged_into": _s(l.merged_into_id)}
 
 
 def _opp(o):
-    return {"id": str(o.id), "name": o.name, "account": str(o.account_id), "stage": o.stage.code, "probability": o.stage.probability, "amount": str(o.amount), "currency": o.currency, "status": o.status, "expected_close": _s(o.expected_close), "owner_id": str(o.owner_id)}
+    return {"id": str(o.id), "name": o.name, "account": str(o.account_id), "stage": o.stage.code, "probability": o.stage.probability, "amount": str(o.amount), "currency": o.currency, "status": o.status, "expected_close": _s(o.expected_close), "owner_id": str(o.owner_id), "contact": _s(o.contact_id), "lost_reason": o.lost_reason, "competitors": o.competitors, "requirements": o.requirements, "decision_makers": o.decision_makers, "risks": o.risks, "next_action": o.next_action, "next_action_date": _s(o.next_action_date), "last_activity_at": o.last_activity_at}
 
 
 def _act(a):
-    return {"id": str(a.id), "type": a.type, "subject": a.subject, "due_at": a.due_at, "done_at": a.done_at, "owner_id": str(a.owner_id), "lead": _s(a.lead_id), "opportunity": _s(a.opportunity_id), "account": _s(a.account_id)}
+    return {"id": str(a.id), "type": a.type, "subject": a.subject, "due_at": a.due_at, "done_at": a.done_at, "owner_id": str(a.owner_id), "lead": _s(a.lead_id), "opportunity": _s(a.opportunity_id), "account": _s(a.account_id), "priority": a.priority, "assignee_id": _s(a.assignee_id), "outcome": a.outcome, "notes": a.notes}
 
 
 class Accounts(APIView):
@@ -75,7 +75,10 @@ class AccountDetail(APIView):
 
     def patch(self, request, pk):
         b = request.data
-        return Response(_account(services.update_account(request.user.id, pk, name=b.get("name"), industry=b.get("industry"), segment=b.get("segment"), is_active=b.get("is_active"))))
+        from modules.crm import records
+
+        keys = ("name", "industry", "segment", "website", "tax_id", "classification", "preferred_channel", "language", "customer_type", "lifecycle_stage", "is_active", "parent_id")
+        return Response(_account(records.update_account_profile(request.user.id, pk, **{k: b[k] for k in keys if k in b})))
 
 
 class Segments(APIView):
@@ -111,13 +114,23 @@ class Leads(APIView):
 
     def post(self, request):
         b = request.data
-        l = services.create_lead(request.user.id, name=b.get("name", ""), company=b.get("company", ""), email=b.get("email", ""), phone=b.get("phone", ""), source=b.get("source", ""), auto_assign=b.get("auto_assign", True), owner_id=b.get("owner_id"))
+        from modules.crm import records
+
+        details = {k: (_date(b[k], k) if k == "follow_up_date" else b[k]) for k in records.LEAD_FIELDS if b.get(k) not in (None, "")}
+        l = records.create_lead_checked(request.user.id, allow_duplicate=bool(b.get("allow_duplicate", False)), details=details, name=b.get("name", ""), company=b.get("company", ""), email=b.get("email", ""), phone=b.get("phone", ""), source=b.get("source", ""), auto_assign=b.get("auto_assign", True), owner_id=b.get("owner_id"))
         return Response(_lead(l), status=201)
 
 
 class LeadDetail(APIView):
     def get_permissions(self):
-        return perm("crm.view")
+        return perm("crm.manage" if self.request.method == "PATCH" else "crm.view")
+
+    def patch(self, request, pk):
+        from modules.crm import records
+
+        b = request.data
+        vals = {k: (_date(b[k], k) if k == "follow_up_date" else b[k]) for k in records.LEAD_FIELDS if k in b}
+        return Response(_lead(records.update_lead(request.user.id, pk, name=b.get("name"), company=b.get("company"), email=b.get("email"), phone=b.get("phone"), source=b.get("source"), **vals)))
 
     def get(self, request, pk):
         return Response(_lead(services._own(m.Lead, pk, request.user.id, "Lead")))
@@ -170,7 +183,17 @@ class Opportunities(APIView):
 
 class OpportunityDetail(APIView):
     def get_permissions(self):
-        return perm("crm.view")
+        return perm("crm.manage" if self.request.method == "PATCH" else "crm.view")
+
+    def patch(self, request, pk):
+        b = request.data
+        kw = {k: (_date(b[k], k) if k == "next_action_date" else b[k]) for k in _pl().DETAIL_FIELDS if k in b}
+        if "expected_close" in b:
+            kw["expected_close"] = _date(b["expected_close"], "expected_close")
+        if "contact" in b:
+            kw["contact_id"] = b["contact"]
+        o = _pl().update_opportunity(request.user.id, pk, name=b.get("name"), amount=b.get("amount"), **kw)
+        return Response(_opp(m.Opportunity.objects.select_related("stage").get(pk=o.pk)))
 
     def get(self, request, pk):
         services._own(m.Opportunity, pk, request.user.id, "Opportunity")
@@ -189,9 +212,15 @@ def _opp_action(fn):
     return View
 
 
-OpportunityStage = _opp_action(lambda r, pk: services.move_stage(r.user.id, pk, r.data.get("stage", "")))
-OpportunityWin = _opp_action(lambda r, pk: services.win_opportunity(r.user.id, pk))
-OpportunityLose = _opp_action(lambda r, pk: services.lose_opportunity(r.user.id, pk, r.data.get("reason", "")))
+def _pl():
+    from modules.crm import pipeline
+
+    return pipeline
+
+
+OpportunityStage = _opp_action(lambda r, pk: _pl().move_stage_tracked(r.user.id, pk, r.data.get("stage", ""), r.data.get("note", "")))
+OpportunityWin = _opp_action(lambda r, pk: _pl().win(r.user.id, pk))
+OpportunityLose = _opp_action(lambda r, pk: _pl().lose(r.user.id, pk, r.data.get("reason", "")))
 
 
 class Activities(APIView):
@@ -204,7 +233,7 @@ class Activities(APIView):
     def post(self, request):
         b = request.data
         due = parse_datetime(b["due_at"]) if b.get("due_at") else None
-        a = services.log_activity(request.user.id, type=b.get("type", ""), subject=b.get("subject", ""), due_at=due, notes=b.get("notes", ""), lead_id=b.get("lead"), opportunity_id=b.get("opportunity"), account_id=b.get("account"))
+        a = _pl().schedule_activity(request.user.id, type=b.get("type", ""), subject=b.get("subject", ""), due_at=due, notes=b.get("notes", ""), priority=b.get("priority", "MEDIUM"), assignee_id=b.get("assignee"), lead_id=b.get("lead"), opportunity_id=b.get("opportunity"), account_id=b.get("account"))
         return Response(_act(a), status=201)
 
 
@@ -213,7 +242,7 @@ class ActivityComplete(APIView):
         return perm("crm.manage")
 
     def post(self, request, pk):
-        return Response(_act(services.complete_activity(request.user.id, pk)))
+        return Response(_act(_pl().complete_with_outcome(request.user.id, pk, request.data.get("outcome", ""))))
 
 
 class Followups(APIView):

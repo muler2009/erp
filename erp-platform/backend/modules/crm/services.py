@@ -24,6 +24,9 @@ DEFAULT_STAGES = [("PROSPECTING", "Prospecting", 1, 10, False, False), ("QUALIFI
 def seed_defaults():
     for code, name, pos, prob, won, lost in DEFAULT_STAGES:
         m.PipelineStage.objects.get_or_create(code=code, defaults=dict(name=name, position=pos, probability=prob, is_won=won, is_lost=lost))
+    from modules.crm import service_desk
+
+    service_desk.seed_defaults()
 
 
 def sees_all(user_id):
@@ -32,13 +35,23 @@ def sees_all(user_id):
 
 def scope(qs, user_id, owner_field="owner_id"):
     """Queryset visible to `user_id`."""
-    return qs if sees_all(user_id) else qs.filter(**{owner_field: user_id})
+    if sees_all(user_id):
+        return qs
+    from modules.crm import teams
+
+    ids = teams.visible_owner_ids(user_id)  # yourself, plus your team's people when you manage or lead one
+    return qs.filter(**{owner_field: user_id}) if ids == {user_id} else qs.filter(**{f"{owner_field}__in": ids})
 
 
 def _own(model, pk, user_id, label, lock=False):
     qs = model.objects.select_for_update() if lock else model.objects
     obj = qs.filter(pk=pk).first()
-    if obj is None or not (sees_all(user_id) or getattr(obj, "owner_id", None) == user_id):
+    if obj is not None and not sees_all(user_id) and getattr(obj, "owner_id", None) != user_id:
+        from modules.crm import teams
+
+        if getattr(obj, "owner_id", None) not in teams.visible_owner_ids(user_id):
+            obj = None
+    if obj is None:
         raise DomainError(f"{label} not found.", code="not_found", status_code=404)  # same answer for missing and not yours
     return obj
 
@@ -127,6 +140,9 @@ def assign_owner(actor_id, kind, record_id, new_owner_id):
         raise ValidationFailed("The new owner must be an active member.", code="invalid_owner")
     old, obj.owner_id = obj.owner_id, new_owner_id
     obj.save(update_fields=["owner_id", "updated_at"])
+    from modules.crm import teams
+
+    teams.log_change(kind, obj.id, old, new_owner_id, actor_id)
     record_tenant_event(current_tenant(), "crm.owner.changed", actor_user_id=actor_id, target_type=model.__name__, target_id=obj.id, metadata={"from": str(old), "to": str(new_owner_id)})
     return obj
 
@@ -167,7 +183,7 @@ def convert_lead(actor_id, lead_id, *, opportunity_name=None, amount=0, currency
         raise ValidationFailed("An active currency is required for the opportunity.", code="invalid_currency")
     account = _own(m.CrmAccount, account_id, actor_id, "Account") if account_id else m.CrmAccount.objects.create(name=lead.company or lead.name, owner_id=lead.owner_id or actor_id)
     contact = m.Contact.objects.create(account=account, first_name=lead.name, email=lead.email, phone=lead.phone, owner_id=lead.owner_id or actor_id)
-    opp = m.Opportunity.objects.create(name=opportunity_name or f"{account.name} opportunity", account=account, contact=contact, stage=_stage("PROSPECTING"), amount=Decimal(str(amount)), currency=currency, expected_close=expected_close, owner_id=lead.owner_id or actor_id)
+    opp = m.Opportunity.objects.create(name=opportunity_name or f"{account.name} opportunity", account=account, contact=contact, stage=_stage("PROSPECTING"), amount=Decimal(str(amount)), currency=currency, expected_close=expected_close, owner_id=lead.owner_id or actor_id, campaign=lead.campaign)
     lead.status, lead.converted_account, lead.converted_opportunity, lead.converted_at = "CONVERTED", account, opp, timezone.now()
     lead.save()
     m.Activity.objects.filter(lead=lead).update(opportunity=opp)

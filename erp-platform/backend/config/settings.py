@@ -200,6 +200,8 @@ CELERY_BEAT_SCHEDULE = {
     "purge-deleted-files": {"task": "files.purge_all", "schedule": 86400},
     "escalate-overdue-approvals": {"task": "workflows.escalate_all", "schedule": 300.0},
     "hr-daily": {"task": "hr.daily_all", "schedule": 86400},
+    "crm-daily": {"task": "crm.daily_all", "schedule": 3600.0},
+    "sales-daily": {"task": "sales.daily_all", "schedule": 3600.0},
 }
 
 # ---------------------------------------------------------------- events / files

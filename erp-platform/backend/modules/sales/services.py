@@ -72,11 +72,11 @@ def create_price_list(actor_id, *, name, currency, items, valid_from=None, valid
     return pl
 
 
-def price_for(product_id, currency, quantity, on_date):
-    """Best list price: largest qualifying quantity break, then lowest price, across active valid lists."""
-    items = m.PriceListItem.objects.filter(price_list__is_active=True, price_list__currency=currency, product_id=product_id, min_quantity__lte=quantity).filter(
-        models_q_valid(on_date)).order_by("-min_quantity", "unit_price")
-    item = items.first()
+def price_for(product_id, currency, quantity, on_date, account_id=None):
+    """List price: contract > customer > promotional > standard lists, then the largest quantity break, then the lowest price."""
+    from modules.sales import pricing
+
+    item = pricing.best_price(product_id, currency, quantity, on_date, account_id)
     return item.unit_price if item else None
 
 
@@ -87,8 +87,11 @@ def models_q_valid(on_date):
 
 
 # ----------------------------------------------------------------------------- pricing engine
-def _price_lines(currency, raw_lines, on_date):
+def _price_lines(currency, raw_lines, on_date, actor_id=None, account=None):
+    from modules.sales import pricing
+
     cur = _currency(currency)
+    raw_lines = pricing.expand_bundles(raw_lines)
     if not raw_lines:
         raise ValidationFailed("At least one line is required.", code="no_lines")
     taxes = {str(t.id): t for t in fm.TaxRate.objects.filter(id__in=[r["tax_rate"] for r in raw_lines if r.get("tax_rate")], is_active=True, kind="SALES")}
@@ -105,10 +108,12 @@ def _price_lines(currency, raw_lines, on_date):
         desc = (r.get("description") or (product.name if product else "")).strip()
         if not desc:
             raise ValidationFailed(f"Line {i}: a product or description is required.", code="invalid_line")
-        if r.get("unit_price") not in (None, ""):
-            price = _dec(r["unit_price"], "unit_price")
+        list_price = price_for(product.id, currency, qty, on_date, account.id if account else None) if product else None
+        supplied = _dec(r["unit_price"], "unit_price") if r.get("unit_price") not in (None, "") else None
+        if supplied is not None:
+            price = supplied
         elif product:
-            price = price_for(product.id, currency, qty, on_date)
+            price = list_price
             if price is None:
                 raise ValidationFailed(f"Line {i}: no price list entry for {product.sku} in {currency}.", code="no_price")
         else:
@@ -117,9 +122,12 @@ def _price_lines(currency, raw_lines, on_date):
         if price < 0 or not (ZERO <= disc <= 100):
             raise ValidationFailed(f"Line {i}: price must be non-negative and discount between 0 and 100.", code="invalid_amount")
         tax = taxes.get(str(r["tax_rate"])) if r.get("tax_rate") else None
+        if not r.get("tax_rate") and product is not None and getattr(product, "sales_profile", None) and product.sales_profile.default_tax_rate_id:
+            tax = product.sales_profile.default_tax_rate if product.sales_profile.default_tax_rate.is_active else None
         if r.get("tax_rate") and tax is None:
             raise ValidationFailed(f"Line {i}: unknown or inactive sales tax rate.", code="invalid_tax_rate")
         net = _q(price * (100 - disc) / 100, 4)
+        pricing.check_line(i, product=product, account=account, actor_id=actor_id, currency=currency, on_date=on_date, net=net, disc=disc, supplied_price=supplied, list_price=list_price)
         total = _q(qty * net, cur.decimals)
         tax_amount = _q(total * tax.rate / 100, cur.decimals) if tax else ZERO
         subtotal += total
@@ -146,28 +154,37 @@ def ensure_customer(actor_id, account):
 
 # ----------------------------------------------------------------------------- quotations
 @transaction.atomic
-def create_quotation(actor_id, *, account_id, currency, lines, valid_until=None, opportunity_id=None):
+def create_quotation(actor_id, *, account_id, currency, lines, valid_until=None, opportunity_id=None, **terms):
+    from modules.sales import quotes
+
     account = crm._own(cm.CrmAccount, account_id, actor_id, "Account")
     opp = crm._own(cm.Opportunity, opportunity_id, actor_id, "Opportunity") if opportunity_id else None
     if opp and opp.account_id != account.id:
         raise ValidationFailed("The opportunity belongs to a different account.", code="invalid_opportunity")
     today = timezone.now().date()
-    rows, sub, tax, _ = _price_lines(currency, lines, today)
-    q = m.Quotation.objects.create(number=sequences.next_number("sales.quotation", for_type="Quotation"), account=account, opportunity=opp, currency=currency, valid_until=valid_until, subtotal=sub, tax_total=tax, total=sub + tax, created_by=actor_id)
+    rows, sub, tax, max_disc = _price_lines(currency, lines, today, actor_id, account)
+    q = m.Quotation.objects.create(max_discount=max_disc, number=sequences.next_number("sales.quotation", for_type="Quotation"), account=account, opportunity=opp, currency=currency, valid_until=valid_until, subtotal=sub, tax_total=tax, total=sub + tax, created_by=actor_id)
+    quotes.apply_terms(q, **terms)
+    q.save()
     _save_lines(m.QuotationLine, "quotation", q, rows)
     return q
 
 
 @transaction.atomic
-def update_quotation(actor_id, quotation_id, *, lines, valid_until=None, expected_version=None):
+def update_quotation(actor_id, quotation_id, *, lines, valid_until=None, expected_version=None, **terms):
+    from modules.sales import quotes
+
     q = _get(m.Quotation, quotation_id, "Quotation", lock=True)
     crm._own(cm.CrmAccount, q.account_id, actor_id, "Quotation")
     if q.status != "DRAFT":
         raise DomainError("Only draft quotations can be edited.", code="invalid_state_transition")
     if expected_version is not None and expected_version != q.version:
         raise DomainError("The quotation was changed by someone else.", code="version_conflict")
-    rows, sub, tax, _ = _price_lines(q.currency, lines, timezone.now().date())
+    rows, sub, tax, max_disc = _price_lines(q.currency, lines, timezone.now().date(), actor_id, q.account)
+    quotes.snapshot(q, actor_id, "EDITED")
     q.lines.all().delete()
+    quotes.apply_terms(q, **terms)
+    q.max_discount = max_disc
     q.subtotal, q.tax_total, q.total, q.version = sub, tax, sub + tax, q.version + 1
     if valid_until is not None:
         q.valid_until = valid_until
@@ -189,7 +206,9 @@ def _transition(model, label, pk, actor_id, allowed_from, to, extra=None):
 
 
 def send_quotation(actor_id, quotation_id):
-    return _transition(m.Quotation, "Quotation", quotation_id, actor_id, ("DRAFT",), "SENT")
+    from modules.sales import quotes
+
+    return quotes.send(actor_id, quotation_id)
 
 
 def reject_quotation(actor_id, quotation_id):
@@ -212,7 +231,7 @@ def convert_quotation(actor_id, quotation_id, *, order_date=None):
     if q.status != "ACCEPTED":
         raise DomainError("Only an accepted quotation can become an order.", code="invalid_state_transition")
     lines = [{"product": l.product_id, "description": l.description, "quantity": l.quantity, "unit_price": l.unit_price, "discount_percent": l.discount_percent, "tax_rate": l.tax_rate_id} for l in q.lines.all()]
-    order = create_order(actor_id, account_id=q.account_id, currency=q.currency, order_date=order_date or timezone.now().date(), lines=lines, opportunity_id=q.opportunity_id, quotation=q)
+    order = create_order(actor_id, account_id=q.account_id, currency=q.currency, order_date=order_date or timezone.now().date(), lines=lines, opportunity_id=q.opportunity_id, quotation=q, agreed=True)  # the quoted prices were already checked (and approved) when it was sent
     q.status = "CONVERTED"
     q.save(update_fields=["status", "updated_at"])
     return order
@@ -220,12 +239,12 @@ def convert_quotation(actor_id, quotation_id, *, order_date=None):
 
 # ----------------------------------------------------------------------------- orders
 @transaction.atomic
-def create_order(actor_id, *, account_id, currency, order_date, lines, opportunity_id=None, quotation=None):
+def create_order(actor_id, *, account_id, currency, order_date, lines, opportunity_id=None, quotation=None, agreed=False):
     account = crm._own(cm.CrmAccount, account_id, actor_id, "Account")
     if not account.is_active:
         raise ValidationFailed("The account is inactive.", code="invalid_account")
     opp = crm._own(cm.Opportunity, opportunity_id, actor_id, "Opportunity") if opportunity_id else None
-    rows, sub, tax, max_disc = _price_lines(currency, lines, order_date)
+    rows, sub, tax, max_disc = _price_lines(currency, lines, order_date, None if agreed else actor_id, account)
     order = m.SalesOrder.objects.create(number=sequences.next_number("sales.order", on_date=order_date, for_type="SalesOrder"), account=account, opportunity=opp, quotation=quotation, currency=currency, order_date=order_date, subtotal=sub, tax_total=tax, total=sub + tax, max_discount=max_disc, created_by=actor_id)
     _save_lines(m.SalesOrderLine, "order", order, rows)
     record_tenant_event(current_tenant(), "sales.order.created", actor_user_id=actor_id, target_type="SalesOrder", target_id=order.id, metadata={"number": order.number, "total": str(order.total)})
@@ -240,7 +259,7 @@ def update_order(actor_id, order_id, *, lines, expected_version=None):
         raise DomainError("Only draft orders can be edited.", code="invalid_state_transition")
     if expected_version is not None and expected_version != order.version:
         raise DomainError("The order was changed by someone else.", code="version_conflict")
-    rows, sub, tax, max_disc = _price_lines(order.currency, lines, order.order_date)
+    rows, sub, tax, max_disc = _price_lines(order.currency, lines, order.order_date, actor_id, order.account)
     order.lines.all().delete()
     order.subtotal, order.tax_total, order.total, order.max_discount, order.version = sub, tax, sub + tax, max_disc, order.version + 1
     order.save()
@@ -258,6 +277,9 @@ def _needs_approval(order):
 def _confirm(order, approver_id):
     order.status, order.approved_by = "CONFIRMED", approver_id
     order.save(update_fields=["status", "approved_by", "updated_at"])
+    from modules.sales import orders_ext
+
+    orders_ext.reserve_order(order)
     events.emit("sales.order.confirmed", {"order_id": str(order.id), "number": order.number, "account_id": str(order.account_id), "total": str(order.total), "currency": order.currency}, dedup_key=f"order-confirmed-{order.id}")
     if order.opportunity_id and cm.Opportunity.objects.filter(pk=order.opportunity_id, status="OPEN").exists():
         crm.win_opportunity(approver_id or order.created_by, order.opportunity_id, system=True)
@@ -269,9 +291,14 @@ def submit_order(actor_id, order_id):
     crm._own(cm.CrmAccount, order.account_id, actor_id, "Order")
     if order.status != "DRAFT":
         raise DomainError("Only draft orders can be submitted.", code="invalid_state_transition")
-    if order.total <= 0:
+    if order.total <= 0 and not order.replacement_for_id:
         raise DomainError("An order with a zero total cannot be submitted.", code="zero_total")
     needs, base_total = _needs_approval(order)
+    from modules.sales import orders_ext
+
+    hold = orders_ext.credit_reason(order)  # raises for blocked customers
+    if hold:
+        needs, order.hold_reason = True, hold
     has_workflow = workflows.WorkflowDefinition.objects.filter(subject_type=ORDER_SUBJECT, is_active=True).exists()
     if not needs:
         _confirm(order, None)  # within the discount and value limits: no approval needed
@@ -293,6 +320,9 @@ def approve_order(actor_id, order_id):
         raise DomainError("This order is governed by an approval workflow; decide it in the approval inbox.", code="workflow_governed")
     if order.created_by == actor_id:
         raise DomainError("Separation of duties: you cannot approve an order you created.", code="separation_of_duties", status_code=403)
+    from modules.sales import orders_ext
+
+    orders_ext.credit_reason(order)  # a customer blocked since submission cannot be confirmed
     _confirm(order, actor_id)
     record_tenant_event(current_tenant(), "sales.order.approved", actor_user_id=actor_id, target_type="SalesOrder", target_id=order.id)
     return order
@@ -325,12 +355,15 @@ def cancel_order(actor_id, order_id):
             order = _get(m.SalesOrder, order_id, "Order", lock=True)
     order.status = "CANCELLED"
     order.save(update_fields=["status", "updated_at"])
+    from modules.sales import orders_ext
+
+    orders_ext.release_order(order)
     return order
 
 
 # ----------------------------------------------------------------------------- deliveries
 @transaction.atomic
-def create_delivery(actor_id, order_id, *, location_id, delivery_date, lines, carrier="", tracking_ref=""):
+def create_delivery(actor_id, order_id, *, location_id, delivery_date, lines, carrier="", tracking_ref="", expected_date=None):
     order = _get(m.SalesOrder, order_id, "Order", lock=True)
     if order.status not in ("CONFIRMED", "PARTIALLY_DELIVERED"):
         raise DomainError("Only confirmed orders can be delivered.", code="invalid_state_transition")
@@ -338,7 +371,7 @@ def create_delivery(actor_id, order_id, *, location_id, delivery_date, lines, ca
     if not lines:
         raise ValidationFailed("At least one line is required.", code="no_lines")
     olines = {str(l.id): l for l in m.SalesOrderLine.objects.select_for_update(of=("self",)).filter(order=order).select_related("product")}
-    delivery = m.Delivery.objects.create(number=sequences.next_number("sales.delivery", on_date=delivery_date, for_type="Delivery"), order=order, location=location, delivery_date=delivery_date, carrier=carrier[:80], tracking_ref=tracking_ref[:80], delivered_by=actor_id)
+    delivery = m.Delivery.objects.create(number=sequences.next_number("sales.delivery", on_date=delivery_date, for_type="Delivery"), order=order, location=location, delivery_date=delivery_date, carrier=carrier[:80], tracking_ref=tracking_ref[:80], delivered_by=actor_id, expected_date=expected_date)
     seen, out = set(), []
     for raw in lines:
         line = olines.get(str(raw["order_line"]))
@@ -354,6 +387,9 @@ def create_delivery(actor_id, order_id, *, location_id, delivery_date, lines, ca
             cost, movement_id = mv.unit_cost, mv.id
         line.delivered_quantity += qty
         line.save(update_fields=["delivered_quantity"])
+        from modules.sales import orders_ext
+
+        orders_ext.consume(line, qty)
         m.DeliveryLine.objects.create(delivery=delivery, order_line=line, quantity=qty, lot_code=raw.get("lot_code") or "", unit_cost=cost, stock_movement_id=movement_id)
         out.append({"order_line": str(line.id), "quantity": str(qty)})
     complete = not m.SalesOrderLine.objects.filter(order=order, delivered_quantity__lt=models_f("quantity")).exists()
@@ -386,6 +422,9 @@ def invoice_order(actor_id, order_id, *, lines=None, invoice_date=None):
     order = _get(m.SalesOrder, order_id, "Order", lock=True)
     if order.status not in ("PARTIALLY_DELIVERED", "DELIVERED"):
         raise DomainError("Only delivered orders can be invoiced.", code="invalid_state_transition")
+    from modules.sales import billing
+
+    billing.assert_not_milestone_billed(order)
     olines = {str(l.id): l for l in m.SalesOrderLine.objects.select_for_update(of=("self",)).filter(order=order).select_related("product", "tax_rate")}
     if lines is None:
         wanted = {k: l.invoiceable for k, l in olines.items() if l.invoiceable > 0}
@@ -444,7 +483,7 @@ def release_invoiced_on_void(invoice):
 
 # ----------------------------------------------------------------------------- returns
 @transaction.atomic
-def process_return(actor_id, order_id, *, location_id, return_date, reason, lines):
+def process_return(actor_id, order_id, *, location_id, return_date, reason, lines, quarantine_location_id=None):
     """Goods come back: stock is restored at the cost they left with and a customer credit note (draft) is
     raised for the part that had already been invoiced."""
     if not (reason or "").strip():
@@ -468,15 +507,23 @@ def process_return(actor_id, order_id, *, location_id, return_date, reason, line
             raise ValidationFailed(f"Line {line.line_no}: only {line.delivered_quantity - line.returned_quantity} can still be returned.", code="over_return")
         uninvoiced_present = max(line.delivered_quantity - line.returned_quantity - line.net_invoiced, ZERO)
         credit_qty = max(qty - uninvoiced_present, ZERO)
-        if line.product and line.product.is_stocked:
+        disposition = raw.get("disposition", "RESTOCK")
+        if disposition not in ("RESTOCK", "QUARANTINE", "DISPOSE"):
+            raise ValidationFailed("Disposition must be RESTOCK, QUARANTINE or DISPOSE.", code="invalid_disposition")
+        target = location
+        if disposition == "QUARANTINE":
+            if not quarantine_location_id:
+                raise ValidationFailed("A quarantine location is required for quarantined goods.", code="quarantine_location_required")
+            target = _get(im.Location, quarantine_location_id, "Location")
+        if line.product and line.product.is_stocked and disposition != "DISPOSE":  # disposed goods never re-enter stock; their cost stays in COGS
             dl = list(m.DeliveryLine.objects.filter(order_line=line))
             total_q = sum((d.quantity for d in dl), ZERO)
             avg = (sum((d.quantity * d.unit_cost for d in dl), ZERO) / total_q) if total_q else ZERO
-            inventory.receive_stock(actor_id, product_id=line.product_id, location_id=location.id, quantity=qty, unit_cost=_q(avg, 4), lot_code=raw.get("lot_code") or None, ref_type="return", ref_id=rma.number, reason=f"Return {rma.number}: {reason}"[:300], counter="cogs", on_date=return_date)
+            inventory.receive_stock(actor_id, product_id=line.product_id, location_id=target.id, quantity=qty, unit_cost=_q(avg, 4), lot_code=raw.get("lot_code") or None, ref_type="return", ref_id=rma.number, reason=f"Return {rma.number}: {reason}"[:300], counter="cogs", on_date=return_date)
         line.returned_quantity += qty
         line.credited_quantity += credit_qty
         line.save(update_fields=["returned_quantity", "credited_quantity"])
-        m.SalesReturnLine.objects.create(sales_return=rma, order_line=line, quantity=qty, credit_quantity=credit_qty, lot_code=raw.get("lot_code") or "")
+        m.SalesReturnLine.objects.create(sales_return=rma, order_line=line, quantity=qty, credit_quantity=credit_qty, lot_code=raw.get("lot_code") or "", disposition=disposition)
         if credit_qty > 0:
             credit_lines.append((line, credit_qty))
     if credit_lines:

@@ -7,6 +7,7 @@ from modules.crm import services as crm
 from modules.finance import models as fm
 from modules.sales import models as m
 from modules.sales import services
+from platform_core.authorization import services as authz
 from platform_core.authorization.permissions import require
 from shared.api.errors import ValidationFailed
 from shared.api.pagination import paginate
@@ -29,14 +30,14 @@ def _line(l, extra=False):
 
 
 def _quote(q, lines=False):
-    d = {"id": str(q.id), "number": q.number, "account": str(q.account_id), "opportunity": _s(q.opportunity_id), "currency": q.currency, "status": q.status, "valid_until": _s(q.valid_until), "subtotal": str(q.subtotal), "tax_total": str(q.tax_total), "total": str(q.total), "version": q.version}
+    d = {"id": str(q.id), "number": q.number, "account": str(q.account_id), "opportunity": _s(q.opportunity_id), "currency": q.currency, "status": q.status, "valid_until": _s(q.valid_until), "subtotal": str(q.subtotal), "tax_total": str(q.tax_total), "total": str(q.total), "version": q.version, "payment_terms": q.payment_terms, "delivery_terms": q.delivery_terms, "terms": q.terms, "notes": q.notes, "max_discount": str(q.max_discount), "approved_by": _s(q.approved_by)}
     if lines:
         d["lines"] = [_line(l) for l in q.lines.all()]
     return d
 
 
 def _order(o, lines=False):
-    d = {"id": str(o.id), "number": o.number, "account": str(o.account_id), "opportunity": _s(o.opportunity_id), "currency": o.currency, "order_date": str(o.order_date), "status": o.status, "subtotal": str(o.subtotal), "tax_total": str(o.tax_total), "total": str(o.total), "max_discount": str(o.max_discount), "approval_required": o.approval_required, "created_by": str(o.created_by), "approved_by": _s(o.approved_by), "workflow_instance_id": _s(o.workflow_instance_id), "version": o.version}
+    d = {"id": str(o.id), "number": o.number, "account": str(o.account_id), "opportunity": _s(o.opportunity_id), "currency": o.currency, "order_date": str(o.order_date), "status": o.status, "subtotal": str(o.subtotal), "tax_total": str(o.tax_total), "total": str(o.total), "max_discount": str(o.max_discount), "approval_required": o.approval_required, "created_by": str(o.created_by), "approved_by": _s(o.approved_by), "workflow_instance_id": _s(o.workflow_instance_id), "version": o.version, "hold_reason": o.hold_reason}
     if lines:
         d["lines"] = [_line(l, True) for l in o.lines.all()]
     return d
@@ -62,7 +63,10 @@ class PriceLists(APIView):
         return perm("sales.pricelist.manage" if self.request.method == "POST" else "sales.view")
 
     def get(self, request):
-        return paginate(request, m.PriceList.objects.all(), lambda p: {"id": str(p.id), "name": p.name, "currency": p.currency, "valid_from": _s(p.valid_from), "valid_to": _s(p.valid_to), "is_active": p.is_active, "items": [{"product": str(i.product_id), "min_quantity": str(i.min_quantity), "unit_price": str(i.unit_price)} for i in p.items.all()]})
+        qs = m.PriceList.objects.all()
+        if not authz.has_permission(request.user.id, "sales.pricelist.manage"):
+            qs = qs.filter(account__isnull=True)  # customer / contract prices are commercial secrets of the pricing team
+        return paginate(request, qs, lambda p: {"id": str(p.id), "name": p.name, "kind": p.kind, "account": _s(p.account_id), "currency": p.currency, "valid_from": _s(p.valid_from), "valid_to": _s(p.valid_to), "is_active": p.is_active, "items": [{"product": str(i.product_id), "min_quantity": str(i.min_quantity), "unit_price": str(i.unit_price)} for i in p.items.all()]})
 
     def post(self, request):
         b = request.data
@@ -84,7 +88,8 @@ class PriceLookup(APIView):
             raise ValidationFailed("quantity must be a number.", code="invalid_amount")
         from django.utils import timezone
 
-        price = services.price_for(q.get("product"), q.get("currency", ""), qty, _date(q.get("date"), "date") or timezone.now().date())
+        acct = crm._own(cm.CrmAccount, q["account"], request.user.id, "Account").id if q.get("account") else None
+        price = services.price_for(q.get("product"), q.get("currency", ""), qty, _date(q.get("date"), "date") or timezone.now().date(), acct)
         return Response({"unit_price": _s(price)})
 
 
@@ -101,7 +106,7 @@ class Quotations(APIView):
 
     def post(self, request):
         b = request.data
-        q = services.create_quotation(request.user.id, account_id=b.get("account"), currency=b.get("currency", ""), lines=b.get("lines") or [], valid_until=_date(b.get("valid_until"), "valid_until"), opportunity_id=b.get("opportunity"))
+        q = services.create_quotation(request.user.id, account_id=b.get("account"), currency=b.get("currency", ""), lines=b.get("lines") or [], valid_until=_date(b.get("valid_until"), "valid_until"), opportunity_id=b.get("opportunity"), **{k: b.get(k) for k in ("payment_terms", "delivery_terms", "terms", "notes")})
         return Response(_quote(q, True), status=201)
 
 
@@ -116,7 +121,7 @@ class QuotationDetail(APIView):
 
     def put(self, request, pk):
         b = request.data
-        q = services.update_quotation(request.user.id, pk, lines=b.get("lines") or [], valid_until=_date(b.get("valid_until"), "valid_until"), expected_version=b.get("expected_version"))
+        q = services.update_quotation(request.user.id, pk, lines=b.get("lines") or [], valid_until=_date(b.get("valid_until"), "valid_until"), expected_version=b.get("expected_version"), **{k: b.get(k) for k in ("payment_terms", "delivery_terms", "terms", "notes")})
         return Response(_quote(q, True))
 
 
@@ -200,8 +205,8 @@ class OrderDeliver(APIView):
         from django.utils import timezone
 
         b = request.data
-        d = services.create_delivery(request.user.id, pk, location_id=b.get("location"), delivery_date=_date(b.get("delivery_date"), "delivery_date") or timezone.now().date(), lines=b.get("lines") or [], carrier=b.get("carrier", ""), tracking_ref=b.get("tracking_ref", ""))
-        return Response({"id": str(d.id), "number": d.number, "order": str(d.order_id), "lines": [{"order_line": str(l.order_line_id), "quantity": str(l.quantity), "unit_cost": str(l.unit_cost)} for l in d.lines.all()]}, status=201)
+        d = services.create_delivery(request.user.id, pk, location_id=b.get("location"), delivery_date=_date(b.get("delivery_date"), "delivery_date") or timezone.now().date(), lines=b.get("lines") or [], carrier=b.get("carrier", ""), tracking_ref=b.get("tracking_ref", ""), expected_date=_date(b.get("expected_date"), "expected_date"))
+        return Response({"id": str(d.id), "number": d.number, "order": str(d.order_id), "status": d.status, "lines": [{"order_line": str(l.order_line_id), "quantity": str(l.quantity), "unit_cost": str(l.unit_cost)} for l in d.lines.all()]}, status=201)
 
 
 class OrderInvoice(APIView):

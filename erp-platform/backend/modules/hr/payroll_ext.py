@@ -107,6 +107,23 @@ def add_input(actor_id, employee_id, *, kind, month, amount, description, taxabl
 
 
 @transaction.atomic
+def receive_external_input(source_user_id, *, user_id, kind, month, amount, description):
+    """Integration entry point for other modules (e.g. sales commissions): a PENDING payroll input for the employee linked to
+    `user_id`.  HR still approves it (separation of duties: the sender cannot be the approver)."""
+    e = m.Employee.objects.filter(user_id=user_id).exclude(status="TERMINATED").first()
+    if e is None:
+        raise DomainError("This person has no employee record to receive the payment.", code="no_employee", status_code=409)
+    amt = _dec(amount, "amount")
+    if amt == 0:
+        raise ValidationFailed("Nothing to transfer.", code="invalid_input")
+    month = _first(month)
+    if m.PayrollRun.objects.exclude(status__in=["DRAFT", "CANCELLED"]).filter(period_start=month).exists():
+        raise DomainError("That month's payroll is already approved; use the next month.", code="period_locked")
+    kind_ok = "COMMISSION" if amt > 0 else "ADJUSTMENT"
+    return m.PayrollInput.objects.create(employee=e, kind=kind_ok if kind == "COMMISSION" else kind, month=month, amount=amt, taxable=True, description=description.strip()[:200], created_by=source_user_id)
+
+
+@transaction.atomic
 def decide_input(actor_id, input_id, *, approve):
     _need(actor_id, "hr.payroll.approve")
     i = _get(m.PayrollInput, input_id, "Payroll input", lock=True)

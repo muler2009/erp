@@ -7,9 +7,13 @@ R = NumberSequence.Reset
 register_default_sequence("sales.quotation", "Quotations", "QT-{yyyy}-{seq:05d}", R.YEARLY)
 register_default_sequence("sales.order", "Sales orders", "SO-{yyyy}-{seq:05d}", R.YEARLY)
 register_default_sequence("sales.delivery", "Delivery notes", "DN-{yyyy}-{seq:05d}", R.YEARLY)
+register_default_sequence("sales.contract", "Sales contracts", "SC-{yyyy}-{seq:05d}", R.YEARLY)
+register_default_sequence("sales.return_request", "Return requests", "RR-{yyyy}-{seq:05d}", R.YEARLY)
 register_default_sequence("sales.return", "Sales returns", "RMA-{yyyy}-{seq:05d}", R.YEARLY)
 
 register_event("sales.order.confirmed", required=["order_id", "number", "account_id", "total", "currency"])
+register_event("sales.delivery.confirmed", required=["delivery_id", "order_id", "discrepancies"])
+register_event("sales.delivery.failed", required=["delivery_id", "order_id", "reason"])
 register_event("sales.delivery.completed", required=["delivery_id", "order_id", "lines"])
 
 
