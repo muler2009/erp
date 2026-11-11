@@ -4,10 +4,14 @@ from django.urls import path
 from platform_core.identity import views as auth_views
 from platform_core.platform_api import views as p
 from shared.api.health import healthz, readyz
+from shared.api.public import public_config
+from shared.metrics import metrics_view
 
 urlpatterns = [
     path("healthz", healthz),
     path("readyz", readyz),
+    path("metrics", metrics_view),
+    path("api/v1/public/config", public_config),
     path("auth/login", auth_views.login_view),
     path("auth/callback", auth_views.callback_view),
     path("auth/logout", auth_views.logout_view),

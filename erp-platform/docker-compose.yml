@@ -7,6 +7,10 @@ services:
     healthcheck: {test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"], interval: 5s, retries: 10}
   redis:
     image: redis:7
+    healthcheck: {test: ["CMD", "redis-cli", "ping"], interval: 5s, retries: 10}
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    healthcheck: {test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"], interval: 10s, retries: 10}
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
     command: start-dev --import-realm
@@ -16,19 +20,30 @@ services:
   backend:
     build: {context: ., dockerfile: infrastructure/docker/Dockerfile.backend}
     env_file: .env
-    depends_on: {postgres: {condition: service_healthy}, redis: {condition: service_started}}
+    depends_on: {postgres: {condition: service_healthy}, redis: {condition: service_healthy}}
+    environment: {PROMETHEUS_MULTIPROC_DIR: /tmp/prom, ERP_BEHIND_PROXY: "false"}
+    tmpfs: [/tmp/prom]
+    healthcheck: {test: ["CMD", "python", "-c", "import urllib.request as u; u.urlopen('http://localhost:8000/healthz', timeout=3)"], interval: 15s, retries: 5, start_period: 20s}
     command: >
       sh -c "python manage.py migrate_schemas --shared &&
              gunicorn config.wsgi:application --bind 0.0.0.0:8000 --workers 3"
   worker:
     build: {context: ., dockerfile: infrastructure/docker/Dockerfile.backend}
     env_file: .env
-    depends_on: [backend]
-    command: celery -A config worker -l info
+    depends_on: {backend: {condition: service_healthy}}
+    command: celery -A config worker -l info --concurrency=4
+  beat:
+    # Exactly ONE beat instance: two would double-fire every schedule.
+    build: {context: ., dockerfile: infrastructure/docker/Dockerfile.backend}
+    env_file: .env
+    depends_on: {backend: {condition: service_healthy}}
+    command: celery -A config beat -l info --schedule=/tmp/celerybeat-schedule
   nginx:
     image: nginx:1.27
-    volumes: ["./infrastructure/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro"]
+    volumes:
+      - ./infrastructure/nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro   # run `npm run build` in frontend/ first
     ports: ["80:80"]
-    depends_on: [backend]
+    depends_on: {backend: {condition: service_healthy}}
 volumes:
   pgdata:

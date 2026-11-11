@@ -48,10 +48,14 @@ def _lock(model, pk, label):
 
 # ----------------------------------------------------------------------------- suppliers
 @transaction.atomic
-def create_supplier(actor_id, *, name, tax_id="", email=""):
+def create_supplier(actor_id, *, name, tax_id="", email="", **extra):
     if not name.strip():
         raise ValidationFailed("name is required.", code="invalid_name")
-    return m.Supplier.objects.create(name=name.strip(), tax_id=tax_id, email=email)
+    from modules.procurement import suppliers
+    extra = suppliers.clean_profile({k: v for k, v in extra.items() if v is not None})
+    if tax_id and m.Supplier.objects.filter(tax_id=tax_id).exists():
+        raise DomainError("A supplier with this tax ID is already registered.", code="duplicate_supplier")
+    return m.Supplier.objects.create(name=name.strip(), tax_id=tax_id, email=email, **extra)
 
 
 @transaction.atomic
@@ -131,6 +135,9 @@ def _after_approved(kind, obj):
     if kind == "po":
         events.emit("procurement.purchase_order.approved", {"po_id": str(obj.id), "number": obj.number, "supplier_id": str(obj.supplier_id), "total": str(obj.total), "currency": obj.currency}, dedup_key=f"po-approved-{obj.id}")
     else:
+        from modules.procurement import budgets
+
+        budgets.sync_requisition(obj)
         events.emit("procurement.requisition.approved", {"requisition_id": str(obj.id), "number": obj.number}, dedup_key=f"req-approved-{obj.id}")
 
 
@@ -159,9 +166,11 @@ def _lines_check(raw, price_field=None):
 
 
 @transaction.atomic
-def create_requisition(actor_id, *, title, lines, department_id=None, needed_by=None):
+def create_requisition(actor_id, *, title, lines, department_id=None, needed_by=None, **extra):
+    from modules.procurement import requisitions_ext
+    extra = requisitions_ext.clean({k: v for k, v in extra.items() if v is not None})
     rows = _lines_check(lines, "estimated_unit_price")
-    req = m.Requisition.objects.create(number=sequences.next_number("procurement.requisition", for_type="Requisition"), title=title[:200], requester_id=actor_id, department_id=department_id, needed_by=needed_by,
+    req = m.Requisition.objects.create(number=sequences.next_number("procurement.requisition", for_type="Requisition"), title=title[:200], requester_id=actor_id, department_id=department_id, needed_by=needed_by, **extra,
                                        estimated_total=sum((q * p for _, _, _, q, p in rows), ZERO))
     m.RequisitionLine.objects.bulk_create([m.RequisitionLine(requisition=req, line_no=i, product=pr, description=d, quantity=q, estimated_unit_price=p) for i, pr, d, q, p in rows])
     return req
@@ -177,6 +186,8 @@ def submit_requisition(actor_id, req_id):
     req.status = "SUBMITTED"
     _submit_for_approval(actor_id, req, REQ_SUBJECT, req.estimated_total, f"Requisition {req.number}: {req.title}")
     req.save()
+    from modules.procurement import requisitions_ext
+    requisitions_ext.on_submitted(req)
     return req
 
 
@@ -208,23 +219,29 @@ def cancel_requisition(actor_id, req_id):
             req = _lock(m.Requisition, req_id, "Requisition")
     req.status = "CANCELLED"
     req.save(update_fields=["status", "updated_at"])
+    from modules.procurement import budgets
+
+    budgets.sync_requisition(req)
     return req
 
 
 # ----------------------------------------------------------------------------- RFQ and bids
 @transaction.atomic
-def create_rfq(actor_id, *, title, supplier_ids, requisition_id=None, lines=None, due_date=None):
+def create_rfq(actor_id, *, title, supplier_ids, requisition_id=None, lines=None, due_date=None, **extra):
+    from modules.procurement import sourcing
+
+    extra = sourcing.clean_rfq({k: v for k, v in extra.items() if v is not None})
     suppliers = list(m.Supplier.objects.filter(pk__in=supplier_ids))
-    if not suppliers or len(suppliers) != len(set(map(str, supplier_ids))) or any(s.status != "QUALIFIED" for s in suppliers):
+    if (not suppliers and not extra.get("open_to_all")) or len(suppliers) != len(set(map(str, supplier_ids))) or any(s.status != "QUALIFIED" or s.standing == "BLACKLISTED" for s in suppliers):
         raise ValidationFailed("Invite at least one supplier; all invited suppliers must be qualified.", code="invalid_suppliers")
     req = None
     if requisition_id:
         req = _get(m.Requisition, requisition_id, "Requisition")
-        if req.status != "APPROVED":
+        if req.status not in ("APPROVED", "PARTIALLY_ORDERED"):
             raise DomainError("Only an approved requisition can be sourced.", code="invalid_state_transition")
-        lines = [{"product": l.product_id, "description": l.description, "quantity": l.quantity} for l in req.lines.all()]
+        lines = [{"product": l.product_id, "description": l.description, "quantity": l.quantity - l.ordered_quantity} for l in req.lines.all() if l.quantity > l.ordered_quantity]
     rows = _lines_check(lines)
-    rfq = m.Rfq.objects.create(number=sequences.next_number("procurement.rfq", for_type="Rfq"), title=title[:200], requisition=req, due_date=due_date, created_by=actor_id)
+    rfq = m.Rfq.objects.create(number=sequences.next_number("procurement.rfq", for_type="Rfq"), title=title[:200], requisition=req, due_date=due_date, created_by=actor_id, **extra)
     rfq.suppliers.set(suppliers)
     m.RfqLine.objects.bulk_create([m.RfqLine(rfq=rfq, line_no=i, product=pr, description=d, quantity=q) for i, pr, d, q, _ in rows])
     return rfq
@@ -233,10 +250,9 @@ def create_rfq(actor_id, *, title, supplier_ids, requisition_id=None, lines=None
 @transaction.atomic
 def record_quotation(actor_id, rfq_id, *, supplier_id, currency, prices, lead_time_days=0, valid_until=None):
     rfq = _lock(m.Rfq, rfq_id, "RFQ")
-    if rfq.status != "OPEN":
-        raise DomainError("This RFQ is closed.", code="invalid_state_transition")
-    if not rfq.suppliers.filter(pk=supplier_id).exists():
-        raise ValidationFailed("That supplier was not invited to this RFQ.", code="supplier_not_invited")
+    from modules.procurement import sourcing
+
+    sourcing.check_can_bid(rfq, supplier_id)
     from platform_core.organizations.models import Currency
 
     if not Currency.objects.filter(code=currency, is_active=True).exists():
@@ -260,6 +276,10 @@ def record_quotation(actor_id, rfq_id, *, supplier_id, currency, prices, lead_ti
 def compare_bids(rfq_id, on_date=None):
     """Bid comparison in the base currency: per-line best price and total per quotation."""
     rfq = _get(m.Rfq, rfq_id, "RFQ")
+    from modules.procurement import sourcing
+
+    if not sourcing.bids_visible(rfq):
+        raise DomainError("Bids are sealed until the committee opens them.", code="bids_sealed", status_code=403)
     on_date = on_date or timezone.now().date()
     quotes = list(rfq.quotations.select_related("supplier").prefetch_related("lines"))
     totals, per_line = {}, {}
@@ -301,10 +321,11 @@ def _price_po(order, rows):
 
 
 @transaction.atomic
-def create_po(actor_id, *, supplier_id, currency, order_date, lines, expected_date=None, requisition_id=None, quotation=None):
+def create_po(actor_id, *, supplier_id, currency, order_date, lines, expected_date=None, requisition_id=None, quotation=None, budget_id=None, contract_id=None):
     supplier = _get(m.Supplier, supplier_id, "Supplier")
-    if supplier.status != "QUALIFIED" or supplier.partner_id is None:
-        raise DomainError("Purchase orders can only be raised to qualified suppliers.", code="supplier_not_qualified")
+    from modules.procurement import suppliers as supmod
+
+    supmod.assert_can_transact(supplier)
     from platform_core.organizations.models import Currency
 
     if not Currency.objects.filter(code=currency, is_active=True).exists():
@@ -312,16 +333,35 @@ def create_po(actor_id, *, supplier_id, currency, order_date, lines, expected_da
     req = None
     if requisition_id:
         req = _lock(m.Requisition, requisition_id, "Requisition")
-        if req.status not in ("APPROVED", "CONVERTED"):
+        if req.status not in ("APPROVED", "CONVERTED", "PARTIALLY_ORDERED"):
             raise DomainError("The requisition is not approved.", code="invalid_state_transition")
+    if contract_id:
+        from modules.procurement import contracts
+
+        lines = [dict(l) for l in lines]
+        contracts.price_lines(contract_id, supplier.id, currency, order_date, lines)
     rows = _lines_check(lines, "unit_price")
-    order = m.PurchaseOrder(number=sequences.next_number("procurement.purchase_order", on_date=order_date, for_type="PurchaseOrder"), supplier=supplier, currency=currency, order_date=order_date, expected_date=expected_date, requisition=req, quotation=quotation, created_by=actor_id)
+    budget_id = budget_id or (req.budget_id if req else None)
+    if budget_id:
+        from modules.procurement import budgets
+
+        budgets.check_po_year(budget_id, order_date)
+    order = m.PurchaseOrder(budget_id=budget_id, contract_id=contract_id, number=sequences.next_number("procurement.purchase_order", on_date=order_date, for_type="PurchaseOrder"), supplier=supplier, currency=currency, order_date=order_date, expected_date=expected_date, requisition=req, quotation=quotation, created_by=actor_id)
     _price_po(order, rows)
     order.save()
     m.PurchaseOrderLine.objects.bulk_create([m.PurchaseOrderLine(order=order, line_no=i, product=pr, description=d, quantity=q, unit_price=p) for i, pr, d, q, p in rows])
-    if req and req.status == "APPROVED":
+    from modules.procurement import requisitions_ext
+    linked = requisitions_ext.link_po_lines(order, lines) if req else False
+    if req and not linked and req.status == "APPROVED":  # legacy: the PO covers the whole requisition
         req.status = "CONVERTED"
         req.save(update_fields=["status", "updated_at"])
+        from modules.procurement import budgets
+
+        budgets.sync_requisition(req)  # release the estimate before committing the real order value
+    if order.budget_id:
+        from modules.procurement import budgets
+
+        budgets.sync_po(order)
     record_tenant_event(current_tenant(), "procurement.po.created", actor_user_id=actor_id, target_type="PurchaseOrder", target_id=order.id, metadata={"number": order.number, "total": str(order.total)})
     return order
 
@@ -341,6 +381,9 @@ def update_po(actor_id, order_id, *, lines, expected_date=None, expected_version
     order.version += 1
     order.save()
     m.PurchaseOrderLine.objects.bulk_create([m.PurchaseOrderLine(order=order, line_no=i, product=pr, description=d, quantity=q, unit_price=p) for i, pr, d, q, p in rows])
+    from modules.procurement import budgets
+
+    budgets.sync_po(order)
     return order
 
 
@@ -385,21 +428,35 @@ def cancel_po(actor_id, order_id):
             order = _lock(m.PurchaseOrder, order_id, "Purchase order")
     order.status = "CANCELLED"
     order.save(update_fields=["status", "updated_at"])
+    from modules.procurement import budgets, requisitions_ext
+
+    budgets.sync_po(order)
+    requisitions_ext.release_po_lines(order)
+    from modules.procurement import orders_ext
+
+    orders_ext.release_blanket_lines(order)
     return order
 
 
 # ----------------------------------------------------------------------------- goods receipt
 @transaction.atomic
-def receive_goods(actor_id, order_id, *, location_id, receipt_date, lines, delivery_note=""):
+def receive_goods(actor_id, order_id, *, location_id, receipt_date, lines, delivery_note="", notes="", approve_over=False):
     order = _lock(m.PurchaseOrder, order_id, "Purchase order")
     if order.status not in ("APPROVED", "PARTIALLY_RECEIVED"):
         raise DomainError("Goods can only be received against an approved purchase order.", code="invalid_state_transition")
+    if order.kind == "BLANKET":
+        raise DomainError("Receive against a release of the blanket order, not the blanket itself.", code="blanket_not_receivable")
     location = _get(im.Location, location_id, "Location")
     if not lines:
         raise ValidationFailed("At least one line is required.", code="no_lines")
     po_lines = {str(l.id): l for l in m.PurchaseOrderLine.objects.select_for_update(of=("self",)).filter(order=order).select_related("product")}
     seen = set()
-    receipt = m.GoodsReceipt.objects.create(number=sequences.next_number("procurement.goods_receipt", on_date=receipt_date, for_type="GoodsReceipt"), order=order, location=location, receipt_date=receipt_date, received_by=actor_id, delivery_note=delivery_note[:60])
+    from modules.procurement import receiving
+
+    all_service = all(not (po_lines.get(str(r.get("po_line"))) and po_lines[str(r["po_line"])].product and po_lines[str(r["po_line"])].product.is_stocked) for r in lines)
+    if all_service and not (notes or "").strip():
+        raise ValidationFailed("A service receipt needs an acceptance note describing what was delivered.", code="service_note_required")
+    receipt = m.GoodsReceipt.objects.create(number=sequences.next_number("procurement.goods_receipt", on_date=receipt_date, for_type="GoodsReceipt"), order=order, location=location, receipt_date=receipt_date, received_by=actor_id, delivery_note=delivery_note[:60], kind="SERVICE" if all_service else "GOODS", notes=notes)
     rate = org.get_rate(order.currency, receipt_date)
     event_lines = []
     for raw in lines:
@@ -408,16 +465,18 @@ def receive_goods(actor_id, order_id, *, location_id, receipt_date, lines, deliv
         if line is None or str(raw["po_line"]) in seen:
             raise ValidationFailed("Unknown or duplicated purchase order line.", code="invalid_line")
         seen.add(str(raw["po_line"]))
-        if qty <= 0 or line.received_quantity + qty > line.quantity:
-            raise ValidationFailed(f"Line {line.line_no}: receiving {qty} exceeds the ordered quantity ({line.quantity - line.received_quantity} still open).", code="over_receipt")
-        movement_id = None
+        over = receiving.check_over_receipt(line, qty, approve_over)
+        movement_id, inspect, target = None, bool(raw.get("inspect")), location
         if line.product and line.product.is_stocked:
+            if inspect:
+                target = receiving.quarantine_for(location)
             unit_cost = (line.unit_price * rate).quantize(Decimal("0.0001"), ROUND_HALF_UP)
-            mv = inventory.receive_stock(actor_id, product_id=line.product_id, location_id=location.id, quantity=qty, unit_cost=unit_cost, lot_code=raw.get("lot_code") or None, ref_type="goods_receipt", ref_id=receipt.number, counter="grni", on_date=receipt_date)
+            mv = inventory.receive_stock(actor_id, product_id=line.product_id, location_id=target.id, quantity=qty, unit_cost=unit_cost, lot_code=raw.get("lot_code") or None, expiry_date=raw.get("expiry_date") or None, serials=raw.get("serials"), ref_type="goods_receipt", ref_id=receipt.number, counter="grni", on_date=receipt_date)
             movement_id = mv.id
         line.received_quantity += qty
         line.save(update_fields=["received_quantity"])
-        m.GoodsReceiptLine.objects.create(receipt=receipt, po_line=line, quantity=qty, lot_code=raw.get("lot_code") or "", stock_movement_id=movement_id)
+        pending = inspect and movement_id is not None
+        m.GoodsReceiptLine.objects.create(receipt=receipt, po_line=line, quantity=qty, lot_code=raw.get("lot_code") or "", stock_movement_id=movement_id, over_quantity=over, inspection_status="PENDING" if pending else "NOT_REQUIRED", destination=location if pending else None, quarantine_location=target if pending else None)
         event_lines.append({"po_line": str(line.id), "quantity": str(qty)})
     complete = not m.PurchaseOrderLine.objects.filter(order=order, received_quantity__lt=models_f("quantity")).exists()
     order.status = "RECEIVED" if complete else "PARTIALLY_RECEIVED"
@@ -443,7 +502,7 @@ def _grni_lines(invoice):
 
 
 @transaction.atomic
-def match_invoice(actor_id, invoice_id, order_id):
+def match_invoice(actor_id, invoice_id, order_id, mode="THREE_WAY"):
     """Compare a supplier invoice's stock lines with what was ordered and received. MATCHED invoices may be
     posted; an EXCEPTION is recorded (and blocks posting) until receipts or the invoice change and it is re-run."""
     inv = fm.Invoice.objects.select_for_update().filter(pk=invoice_id).select_related("partner").first()
@@ -463,31 +522,46 @@ def match_invoice(actor_id, invoice_id, order_id):
     lines = order.lines.all()
     ordered = sum((l.quantity * l.unit_price for l in lines), ZERO)
     received = sum((l.received_quantity * l.unit_price for l in lines), ZERO)
+    if mode not in ("THREE_WAY", "TWO_WAY"):
+        raise ValidationFailed("Unknown match mode.", code="invalid_mode")
+    if mode == "TWO_WAY" and not org.get_setting("procurement.allow_two_way_match", False):
+        raise DomainError("Two-way matching is not enabled for this company.", code="two_way_disabled", status_code=403)
     previous = m.InvoiceMatch.objects.select_for_update().filter(invoice=inv).first()
-    already = order.invoiced_value - (previous.goods_value if previous and previous.status == "MATCHED" and previous.order_id == order.id else ZERO)
+    already = order.invoiced_value - (previous.goods_value if previous and previous.status in ("MATCHED", "OVERRIDDEN") and previous.order_id == order.id else ZERO)
     tol = _tolerance()
     problems = {}
-    if already + goods_value > received * (1 + tol):
+    from modules.procurement import verification
+
+    dup = verification.find_duplicates(inv)
+    if dup["exact"]:
+        problems["duplicate_invoice"] = f"supplier invoice number {inv.supplier_ref!r} was already recorded on {', '.join(dup['exact'])}"
+    if mode == "THREE_WAY" and already + goods_value > received * (1 + tol):
         problems["not_received"] = f"invoiced {already + goods_value} exceeds received value {received}"
     if already + goods_value > ordered * (1 + tol):
         problems["not_ordered"] = f"invoiced {already + goods_value} exceeds ordered value {ordered}"
+    if m.GoodsReceiptLine.objects.filter(receipt__order=order, inspection_status__in=("PENDING", "PARTIAL")).exists():
+        problems["inspection_pending"] = "goods on this order are still awaiting inspection"
     status = "EXCEPTION" if problems else "MATCHED"
     q4 = lambda v: str(Decimal(v).quantize(Decimal("0.0001")))
-    detail = {"ordered_value": q4(ordered), "received_value": q4(received), "previously_invoiced": q4(already), "invoice_goods_value": q4(goods_value), "tolerance_percent": str(tol * 100), "problems": problems}
+    detail = {"ordered_value": q4(ordered), "received_value": q4(received), "previously_invoiced": q4(already), "invoice_goods_value": q4(goods_value), "tolerance_percent": str(tol * 100), "mode": mode, "possible_duplicates": dup["possible"], "problems": problems}
     if previous is None:
         match = m.InvoiceMatch.objects.create(invoice=inv, order=order, status=status, goods_value=goods_value, detail=detail, matched_by=actor_id)
     else:
-        if previous.status == "MATCHED":
+        if previous.status in ("MATCHED", "OVERRIDDEN"):
             old = m.PurchaseOrder.objects.select_for_update().get(pk=previous.order_id)
             old.invoiced_value -= previous.goods_value
             old.save(update_fields=["invoiced_value"])
             order.refresh_from_db(fields=["invoiced_value"])
         previous.order, previous.status, previous.goods_value, previous.detail, previous.matched_by = order, status, goods_value, detail, actor_id
+        previous.overridden_by, previous.override_reason = None, ""
         previous.save()
         match = previous
     if status == "MATCHED":
         order.invoiced_value += goods_value
         order.save(update_fields=["invoiced_value"])
+    from modules.procurement import budgets
+
+    budgets.sync_po_consumed(order)
     record_tenant_event(current_tenant(), "procurement.invoice.matched", actor_user_id=actor_id, target_type="Invoice", target_id=inv.id, metadata={"status": status, "po": order.number})
     return match
 
@@ -495,7 +569,7 @@ def match_invoice(actor_id, invoice_id, order_id):
 def require_match_before_posting(invoice):
     if invoice.kind == "SUPPLIER_INVOICE" and _grni_lines(invoice):
         match = m.InvoiceMatch.objects.filter(invoice=invoice).first()
-        if match is None or match.status != "MATCHED":
+        if match is None or match.status not in ("MATCHED", "OVERRIDDEN"):
             raise DomainError("Three-way match required: match this invoice to a purchase order with a MATCHED result before posting.", code="three_way_match_required")
 
 
@@ -503,10 +577,13 @@ def release_match_on_void(invoice):
     match = m.InvoiceMatch.objects.select_for_update().filter(invoice=invoice).first()
     if match is None:
         return
-    if match.status == "MATCHED":
+    if match.status in ("MATCHED", "OVERRIDDEN"):
         order = m.PurchaseOrder.objects.select_for_update().get(pk=match.order_id)
         order.invoiced_value -= match.goods_value
         order.save(update_fields=["invoiced_value"])
+        from modules.procurement import budgets
+
+        budgets.sync_po_consumed(order)
     match.delete()
 
 

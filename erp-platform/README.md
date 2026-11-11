@@ -28,4 +28,8 @@ Tenant hosts are `<slug>.<ERP_BASE_DOMAIN>`; the platform console is `ERP_PLATFO
 - The BFF client needs an audience mapper so `erp-api` appears in access tokens used on the Bearer path.
 
 ## Tests
-`cd backend && python -m pytest` (85 tests, needs PostgreSQL). `python manage.py makemigrations --check` must be clean.
+`cd backend && python -m pytest` (needs PostgreSQL; ~700 tests, the full run takes 15-20 minutes). `python manage.py makemigrations --check` must be clean.
+
+## Operations (Phase 11)
+`docs/operations/deployment.md`, `runbooks.md`, `backup-recovery.md`; metrics at `/metrics` (bearer `ERP_METRICS_TOKEN`);
+backup scripts in `infrastructure/backup`; Kubernetes reference manifests in `infrastructure/kubernetes`; Grafana/Prometheus in `infrastructure/monitoring`.

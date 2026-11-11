@@ -81,7 +81,7 @@ def test_override_discount_ceiling_and_price_floor_are_enforced_server_side(f):
     assert code(e) == "below_minimum_price"
     pricing.set_profile(p["sm"].id, w.id, min_price="0")
     assert quote(f, "rep1", [{"product": w.id, "quantity": "1", "discount_percent": "15"}]).total == D("85")
-    crm.update_account  # classification ceiling
+    _ = crm.update_account  # classification ceiling
     from modules.crm import records
 
     records.update_account_profile(p["rep1"].id, f["acct"].id, classification="VIP")

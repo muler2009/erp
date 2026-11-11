@@ -68,7 +68,7 @@ class TenantStatusMiddleware:
 
     SERVING = {"ACTIVE", "SUSPENDED"}
     READ_ONLY = {"MIGRATION_FAILED"}
-    EXEMPT_PREFIXES = ("/healthz", "/readyz")
+    EXEMPT_PREFIXES = ("/healthz", "/readyz", "/metrics")
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -90,3 +90,46 @@ class TenantStatusMiddleware:
             {"error": {"code": code, "message": message, "details": [], "correlation_id": getattr(request, "correlation_id", "")}},
             status=http_status,
         )
+
+
+class SecurityHeadersMiddleware:
+    """Headers Django's SecurityMiddleware does not set. This is an API: nothing it returns should be framed,
+    sniffed, cached by shared caches, or allowed to load other resources."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        response.setdefault("Referrer-Policy", "no-referrer")
+        response.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+        response.setdefault("Cross-Origin-Opener-Policy", "same-origin")
+        response.setdefault("Cross-Origin-Resource-Policy", "same-origin")
+        if request.path.startswith(("/api/", "/auth/", "/metrics")):
+            response.setdefault("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+            response.setdefault("Cache-Control", "no-store")
+        return response
+
+
+class OperationalEndpointsMiddleware:
+    """Answer probes and scrapes on ANY Host header.
+
+    Kubelet and Prometheus call the pod by IP, which is neither a tenant domain nor an allowed host, so
+    tenant routing would 404 them. These endpoints carry no tenant data: /healthz and /readyz expose
+    status only and /metrics requires its bearer token. Everything else goes through normal routing.
+    """
+
+    PATHS = ("/healthz", "/readyz", "/metrics")
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        if request.method in ("GET", "HEAD") and request.path in self.PATHS:
+            from shared.api.health import healthz, readyz
+            from shared.metrics import metrics_view
+
+            request.resolver_match = None
+            view = {"/healthz": healthz, "/readyz": readyz, "/metrics": metrics_view}[request.path]
+            return view(request)
+        return self.get_response(request)

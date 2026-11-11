@@ -199,7 +199,7 @@ def _transition(model, label, pk, actor_id, allowed_from, to, extra=None):
     if obj.status not in allowed_from:
         raise DomainError(f"A {obj.status} {label.lower()} cannot become {to}.", code="invalid_state_transition")
     if extra:
-        extra(obj)
+        extra(obj)  # nosec B610 - a callback argument named "extra", not QuerySet.extra()
     obj.status = to
     obj.save(update_fields=["status", "updated_at"])
     return obj
@@ -383,7 +383,7 @@ def create_delivery(actor_id, order_id, *, location_id, delivery_date, lines, ca
             raise ValidationFailed(f"Line {line.line_no}: delivering {qty} exceeds the open quantity {line.quantity - line.delivered_quantity}.", code="over_delivery")
         cost, movement_id = ZERO, None
         if line.product and line.product.is_stocked:
-            mv = inventory.issue_stock(actor_id, product_id=line.product_id, location_id=location.id, quantity=qty, lot_code=raw.get("lot_code") or None, reason=f"Delivery {delivery.number}", ref_type="delivery", ref_id=delivery.number, on_date=delivery_date)
+            mv = inventory.issue_stock(actor_id, product_id=line.product_id, location_id=location.id, quantity=qty, lot_code=raw.get("lot_code") or None, serials=raw.get("serials"), reason=f"Delivery {delivery.number}", ref_type="delivery", ref_id=delivery.number, on_date=delivery_date)
             cost, movement_id = mv.unit_cost, mv.id
         line.delivered_quantity += qty
         line.save(update_fields=["delivered_quantity"])
@@ -519,7 +519,7 @@ def process_return(actor_id, order_id, *, location_id, return_date, reason, line
             dl = list(m.DeliveryLine.objects.filter(order_line=line))
             total_q = sum((d.quantity for d in dl), ZERO)
             avg = (sum((d.quantity * d.unit_cost for d in dl), ZERO) / total_q) if total_q else ZERO
-            inventory.receive_stock(actor_id, product_id=line.product_id, location_id=target.id, quantity=qty, unit_cost=_q(avg, 4), lot_code=raw.get("lot_code") or None, ref_type="return", ref_id=rma.number, reason=f"Return {rma.number}: {reason}"[:300], counter="cogs", on_date=return_date)
+            inventory.receive_stock(actor_id, product_id=line.product_id, location_id=target.id, quantity=qty, unit_cost=_q(avg, 4), lot_code=raw.get("lot_code") or None, serials=raw.get("serials"), ref_type="return", ref_id=rma.number, reason=f"Return {rma.number}: {reason}"[:300], counter="cogs", on_date=return_date)
         line.returned_quantity += qty
         line.credited_quantity += credit_qty
         line.save(update_fields=["returned_quantity", "credited_quantity"])

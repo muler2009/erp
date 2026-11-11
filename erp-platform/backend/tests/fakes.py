@@ -31,10 +31,12 @@ class FakeIdentityProvisioner(IdentityProvisioner):
     def send_required_actions_email(self, subject):
         self.emails_sent.append(subject)
 
-    def register_redirect_uris(self, redirect_uri, post_logout_uri):
+    def register_redirect_uris(self, redirect_uri, post_logout_uri, spa_redirect_uri=""):
         if self.fail_register_redirect:
             raise RuntimeError("keycloak unavailable")
         self.redirect_uris.add(redirect_uri)
+        if spa_redirect_uri:
+            self.redirect_uris.add(spa_redirect_uri)
 
     def disable_user(self, subject):
         pass

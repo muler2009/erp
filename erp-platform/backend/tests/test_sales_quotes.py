@@ -56,7 +56,7 @@ def test_large_or_heavily_discounted_quotes_need_approval_by_someone_else(f):
     assert Notification.objects.filter(user_id=p["rep1"].id, notification_type="sales.quotation.approved").exists()
     disc = q(f, lines=[{**line(f, qty="1", price="100"), "discount_percent": "20"}])
     assert disc.max_discount == 20
-    cm.Opportunity  # discount above the 10 % limit also needs approval (rep has no override but ceiling applies only with rules)
+    _ = cm.Opportunity  # discount above the 10 % limit also needs approval (rep has no override but ceiling applies only with rules)
     assert sales.send_quotation(p["rep1"].id, disc.id).status == "PENDING_APPROVAL"
     with pytest.raises(ValidationFailed):
         quotes.reject_approval(p["sm"].id, disc.id, " ")

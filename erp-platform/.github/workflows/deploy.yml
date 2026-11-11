@@ -1,0 +1,35 @@
+name: deploy
+# Manual, per environment. Applies the migration Job first and only rolls the Deployments if it succeeds.
+on:
+  workflow_dispatch:
+    inputs:
+      environment: {description: "staging or production", required: true, type: choice, options: [staging, production]}
+      image_tag: {description: "Image tag (commit SHA built by ci)", required: true}
+permissions: {contents: read}
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}   # production requires reviewer approval configured on the environment
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure kubectl
+        run: |
+          mkdir -p ~/.kube && echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > ~/.kube/config && chmod 600 ~/.kube/config
+      - name: Render manifests with the image tag
+        run: |
+          IMAGE="ghcr.io/${{ github.repository }}/backend:${{ inputs.image_tag }}"
+          sed "s#registry.example.com/erp/backend:CHANGE_ME#${IMAGE}#g" infrastructure/kubernetes/base.yaml > /tmp/erp.yaml
+      - name: Back up before migrating
+        run: kubectl -n erp create job --from=cronjob/erp-backup "backup-pre-${{ github.run_id }}" && kubectl -n erp wait --for=condition=complete --timeout=30m "job/backup-pre-${{ github.run_id }}"
+      - name: Migrate
+        run: |
+          kubectl -n erp delete job erp-migrate --ignore-not-found
+          kubectl apply -f /tmp/erp.yaml
+          kubectl -n erp wait --for=condition=complete --timeout=20m job/erp-migrate
+      - name: Roll out
+        run: |
+          for d in erp-backend erp-worker erp-beat; do kubectl -n erp rollout status deploy/$d --timeout=10m; done
+      - name: Roll back on failure
+        if: failure()
+        run: |
+          for d in erp-backend erp-worker erp-beat; do kubectl -n erp rollout undo deploy/$d || true; done

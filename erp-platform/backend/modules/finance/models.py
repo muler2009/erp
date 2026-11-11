@@ -238,3 +238,42 @@ class CreditSettlement(models.Model):
 
     class Meta:
         constraints = [models.CheckConstraint(condition=Q(amount__gt=0), name="settlement_positive")]
+
+
+class BankStatement(Base):
+    """A bank statement entered for one bank account; its lines are matched to posted ledger lines on that account's GL account."""
+
+    class Status(models.TextChoices):
+        OPEN = "OPEN"
+        RECONCILED = "RECONCILED"
+
+    bank_account = models.ForeignKey(BankAccount, on_delete=models.PROTECT, related_name="statements")
+    statement_date = models.DateField(db_index=True)
+    opening_balance = models.DecimalField(**MONEY)
+    closing_balance = models.DecimalField(**MONEY)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.OPEN, db_index=True)
+    reconciled_at = models.DateTimeField(null=True, blank=True)
+    reconciled_by = models.UUIDField(null=True, blank=True)
+    created_by = models.UUIDField(null=True, blank=True)
+
+    class Meta:
+        indexes = [models.Index(fields=["bank_account", "statement_date"], name="bank_stmt_acct_date_idx")]
+
+
+class BankStatementLine(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    statement = models.ForeignKey(BankStatement, on_delete=models.CASCADE, related_name="lines")
+    line_no = models.PositiveSmallIntegerField()
+    line_date = models.DateField()
+    description = models.CharField(max_length=300, blank=True)
+    amount = models.DecimalField(**MONEY)  # signed: money in is positive, money out is negative (the bank's view of your account)
+    matched_line = models.OneToOneField(JournalLine, null=True, blank=True, on_delete=models.PROTECT, related_name="bank_match")
+    matched_at = models.DateTimeField(null=True, blank=True)
+    matched_by = models.UUIDField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["statement", "line_no"], name="bank_stmt_line_no_uniq"),
+            models.CheckConstraint(condition=~Q(amount=0), name="bank_stmt_line_amount_nonzero"),
+        ]
+        ordering = ["line_no"]

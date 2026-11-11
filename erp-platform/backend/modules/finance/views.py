@@ -338,3 +338,100 @@ class Ledger(APIView):
     def get(self, request):
         acct = get_object_or_404(m.Account, code=request.query_params.get("account", ""))
         return Response(reports.ledger(acct, _date(request, "from"), _date(request, "to")))
+
+
+# ----------------------------------------------------------------------------- bank reconciliation
+def _stmt(st, lines=False):
+    d = {"id": str(st.id), "bank_account": str(st.bank_account_id), "bank_account_name": st.bank_account.name, "currency": st.bank_account.currency, "statement_date": str(st.statement_date), "opening_balance": str(st.opening_balance), "closing_balance": str(st.closing_balance), "status": st.status, "reconciled_at": st.reconciled_at}
+    if lines:
+        d["lines"] = [{"id": str(l.id), "line_no": l.line_no, "date": str(l.line_date), "description": l.description, "amount": str(l.amount), "matched": l.matched_line_id is not None,
+                       "ledger_entry": l.matched_line.entry.number if l.matched_line_id else None} for l in st.lines.select_related("matched_line__entry")]
+    return d
+
+
+def _ledger_line(j):
+    return {"id": str(j.id), "entry": j.entry.number, "date": str(j.entry.entry_date), "description": j.description or j.entry.memo, "amount": str(j.debit - j.credit)}
+
+
+class StatementLineIn(serializers.Serializer):
+    date = serializers.DateField()
+    description = serializers.CharField(required=False, allow_blank=True, default="", max_length=300)
+    amount = serializers.DecimalField(max_digits=20, decimal_places=4)
+
+
+class StatementIn(serializers.Serializer):
+    bank_account = serializers.UUIDField()
+    statement_date = serializers.DateField()
+    opening_balance = serializers.DecimalField(max_digits=20, decimal_places=4)
+    closing_balance = serializers.DecimalField(max_digits=20, decimal_places=4)
+    lines = StatementLineIn(many=True, allow_empty=False, max_length=2000)
+
+
+class BankStatements(APIView):
+    def get_permissions(self):
+        return perm("finance.bank.reconcile" if self.request.method == "POST" else "finance.accounts.view")
+
+    def get(self, request):
+        qs = m.BankStatement.objects.select_related("bank_account")
+        for f in ("bank_account", "status"):
+            if request.query_params.get(f):
+                qs = qs.filter(**{f: request.query_params[f]})
+        return paginate(request, qs, _stmt)
+
+    def post(self, request):
+        v = StatementIn(data=request.data)
+        v.is_valid(raise_exception=True)
+        d = v.validated_data
+        st = services.create_bank_statement(request.user.id, bank_account_id=d["bank_account"], statement_date=d["statement_date"], opening_balance=d["opening_balance"], closing_balance=d["closing_balance"],
+                                            lines=[{"date": l["date"], "description": l["description"], "amount": l["amount"]} for l in d["lines"]])
+        return Response(_stmt(st, lines=True), status=201)
+
+
+class BankStatementDetail(APIView):
+    def get_permissions(self):
+        return perm("finance.accounts.view")
+
+    def get(self, request, pk):
+        st = get_object_or_404(m.BankStatement.objects.select_related("bank_account"), pk=pk)
+        return Response(_stmt(st, lines=True))
+
+
+class BankStatementCandidates(APIView):
+    def get_permissions(self):
+        return perm("finance.bank.reconcile")
+
+    def get(self, request, pk):
+        st = get_object_or_404(m.BankStatement.objects.select_related("bank_account"), pk=pk)
+        qs = services.bank_match_candidates(st, request.query_params.get("amount") or None)
+        # Bounded list (newest first) in the usual page shape; narrow it with ?amount= when there are more than 200.
+        rows = list(qs.order_by("-entry__entry_date", "-entry__number", "line_no")[:200])
+        return Response({"results": [_ledger_line(j) for j in rows], "next": None, "previous": None})
+
+
+class BankLineMatch(APIView):
+    def get_permissions(self):
+        return perm("finance.bank.reconcile")
+
+    def post(self, request, pk, line_id):
+        get_object_or_404(m.BankStatement, pk=pk)
+        line = services.match_bank_line(request.user.id, line_id, request.data.get("journal_line"))
+        return Response({"id": str(line.id), "matched": True})
+
+
+class BankLineUnmatch(APIView):
+    def get_permissions(self):
+        return perm("finance.bank.reconcile")
+
+    def post(self, request, pk, line_id):
+        get_object_or_404(m.BankStatement, pk=pk)
+        line = services.unmatch_bank_line(request.user.id, line_id)
+        return Response({"id": str(line.id), "matched": False})
+
+
+class BankStatementReconcile(APIView):
+    def get_permissions(self):
+        return perm("finance.bank.reconcile")
+
+    def post(self, request, pk):
+        st = services.reconcile_bank_statement(request.user.id, pk, request=request)
+        return Response(_stmt(st, lines=True))

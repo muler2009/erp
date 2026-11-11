@@ -41,11 +41,31 @@ DEFAULT_ACCOUNTS = [  # code, name, type, parent code, postable, control, system
     ("5200", "Operating Expenses", "EXPENSE", "5000", True, False, "default_expense"),
     ("1200", "Inventory", "ASSET", "1000", True, False, "inventory"),
     ("2200", "Goods Received Not Invoiced", "LIABILITY", "2000", True, False, "grni"),
+    ("2210", "Landed Costs Payable", "LIABILITY", "2000", True, False, "landed_cost_payable"),
     ("5400", "Inventory Adjustments", "EXPENSE", "5000", True, False, "inventory_adjustment"),
     ("2400", "Payroll Payable", "LIABILITY", "2000", True, False, "payroll_payable"),
     ("2410", "Payroll Tax and Deductions Payable", "LIABILITY", "2000", True, False, "payroll_tax_payable"),
     ("2420", "Pension Payable", "LIABILITY", "2000", True, False, "pension_payable"),
     ("5300", "Salaries and Wages", "EXPENSE", "5000", True, False, "salary_expense"),
+    ("2310", "Withholding Tax Payable", "LIABILITY", "2000", True, False, "wht_payable"),
+    ("4200", "Purchase Discounts Received", "REVENUE", "4000", True, False, "purchase_discount"),
+    ("1500", "Fixed Assets at Cost", "ASSET", "1000", True, False, "fixed_assets"),
+    ("1510", "Asset Acquisition Clearing", "ASSET", "1000", True, False, "asset_clearing"),
+    ("1590", "Accumulated Depreciation", "ASSET", "1000", True, False, "accumulated_depreciation"),
+    ("3200", "Asset Revaluation Surplus", "EQUITY", "3000", True, False, "revaluation_surplus"),
+    ("4300", "Donated Assets Income", "REVENUE", "4000", True, False, "donated_income"),
+    ("5500", "Depreciation Expense", "EXPENSE", "5000", True, False, "depreciation_expense"),
+    ("5700", "Maintenance Expense", "EXPENSE", "5000", True, False, "maintenance_expense"),
+    ("5600", "Asset Impairment Loss", "EXPENSE", "5000", True, False, "impairment_loss"),
+    ("5950", "Gain/Loss on Asset Disposal", "EXPENSE", "5000", True, False, "disposal_gain_loss"),
+    ("5800", "Project Costs", "EXPENSE", "5000", True, False, "project_cost"),
+    ("2250", "Employee Claims Payable", "LIABILITY", "2000", True, False, "claims_payable"),
+    ("1250", "Work in Progress", "ASSET", "1000", True, False, "wip"),
+    ("5310", "Production Conversion Absorbed", "EXPENSE", "5000", True, False, "production_absorbed"),
+    ("5320", "Production Variances", "EXPENSE", "5000", True, False, "production_variance"),
+    ("5330", "Production Scrap Loss", "EXPENSE", "5000", True, False, "scrap_loss"),
+    ("5340", "Logistics Costs", "EXPENSE", "5000", True, False, "logistics_cost"),
+    ("2260", "Accrued Logistics Costs", "LIABILITY", "2000", True, False, "accrued_logistics"),
     ("5900", "Foreign Exchange Gain/Loss", "EXPENSE", "5000", True, False, "fx_gain_loss"),
 ]
 
@@ -596,3 +616,98 @@ def post_system_journal(actor_id, entry_date, memo, source_type, source_id, legs
     if not lines:
         return None
     return _post_system_entry(actor_id, entry_date, memo, source_type, source_id, lines)
+
+
+# ----------------------------------------------------------------------------- bank reconciliation
+@transaction.atomic
+def create_bank_statement(actor_id, *, bank_account_id, statement_date, opening_balance, closing_balance, lines):
+    bank = _get(m.BankAccount, bank_account_id, "Bank account")
+    if not bank.is_active:
+        raise ValidationFailed("This bank account is inactive.", code="inactive_bank_account")
+    if not lines:
+        raise ValidationFailed("A statement needs at least one line.", code="no_lines")
+    if len(lines) > 2000:
+        raise ValidationFailed("A statement can have at most 2000 lines.", code="too_many_lines")
+    opening, closing = _dec(opening_balance, "opening_balance"), _dec(closing_balance, "closing_balance")
+    parsed = []
+    for i, raw in enumerate(lines, 1):
+        amount = _dec(raw.get("amount"), f"Line {i} amount")
+        if amount == 0 or amount != amount.quantize(Decimal("0.0001")):
+            raise ValidationFailed(f"Line {i}: the amount must be non-zero with at most 4 decimals.", code="invalid_amount")
+        try:
+            line_date = date_cls.fromisoformat(str(raw.get("date")))
+        except ValueError:
+            raise ValidationFailed(f"Line {i}: the date is not valid.", code="invalid_date")
+        parsed.append((i, line_date, str(raw.get("description", ""))[:300], amount))
+    if opening + sum(p[3] for p in parsed) != closing:
+        raise ValidationFailed("Opening balance plus the lines does not equal the closing balance.", code="statement_does_not_add_up")
+    stmt = m.BankStatement.objects.create(bank_account=bank, statement_date=statement_date, opening_balance=opening, closing_balance=closing, created_by=actor_id)
+    m.BankStatementLine.objects.bulk_create([m.BankStatementLine(statement=stmt, line_no=i, line_date=d, description=desc, amount=a) for i, d, desc, a in parsed])
+    return stmt
+
+
+def bank_match_candidates(statement, amount=None):
+    """Posted ledger lines on the bank account's GL account that no statement line has claimed yet."""
+    qs = m.JournalLine.objects.filter(account_id=statement.bank_account.gl_account_id, entry__status__in=["POSTED", "REVERSED"], bank_match__isnull=True).select_related("entry")
+    if amount is not None:
+        amt = _dec(amount)
+        qs = qs.filter(debit=amt, credit=0) if amt > 0 else qs.filter(credit=-amt, debit=0)
+    return qs
+
+
+def _open_statement_line(line_id):
+    line = m.BankStatementLine.objects.select_for_update().select_related("statement__bank_account").filter(pk=line_id).first()
+    if line is None:
+        raise DomainError("Statement line not found.", code="not_found", status_code=404)
+    stmt = m.BankStatement.objects.select_for_update().get(pk=line.statement_id)
+    if stmt.status != "OPEN":
+        raise DomainError("This statement is already reconciled and cannot change.", code="statement_reconciled")
+    return line
+
+
+@transaction.atomic
+def match_bank_line(actor_id, line_id, journal_line_id):
+    line = _open_statement_line(line_id)
+    jl = m.JournalLine.objects.select_related("entry").filter(pk=journal_line_id).first()
+    if jl is None:
+        raise DomainError("Ledger line not found.", code="not_found", status_code=404)
+    if jl.account_id != line.statement.bank_account.gl_account_id:
+        raise ValidationFailed("That ledger line is not on this bank account's ledger account.", code="wrong_account")
+    if jl.entry.status not in ("POSTED", "REVERSED"):
+        raise ValidationFailed("Only posted ledger lines can be matched.", code="not_posted")
+    if jl.debit - jl.credit != line.amount:
+        raise ValidationFailed("The amounts differ: the statement line and the ledger line must be equal.", code="amount_mismatch")
+    try:
+        with transaction.atomic():
+            line.matched_line, line.matched_at, line.matched_by = jl, timezone.now(), actor_id
+            line.save(update_fields=["matched_line", "matched_at", "matched_by"])
+    except IntegrityError:
+        raise DomainError("That ledger line is already matched to another statement line.", code="already_matched")
+    return line
+
+
+@transaction.atomic
+def unmatch_bank_line(actor_id, line_id):
+    line = _open_statement_line(line_id)
+    line.matched_line, line.matched_at, line.matched_by = None, None, None
+    line.save(update_fields=["matched_line", "matched_at", "matched_by"])
+    return line
+
+
+@transaction.atomic
+def reconcile_bank_statement(actor_id, statement_id, request=None):
+    stmt = m.BankStatement.objects.select_for_update().filter(pk=statement_id).first()
+    if stmt is None:
+        raise DomainError("Statement not found.", code="not_found", status_code=404)
+    if stmt.status != "OPEN":
+        raise DomainError("This statement is already reconciled.", code="statement_reconciled")
+    lines = list(stmt.lines.all())
+    unmatched = [l.line_no for l in lines if l.matched_line_id is None]
+    if unmatched:
+        raise DomainError(f"{len(unmatched)} statement line(s) are not matched yet.", code="unmatched_lines")
+    if stmt.opening_balance + sum(l.amount for l in lines) != stmt.closing_balance:
+        raise DomainError("Opening balance plus the lines does not equal the closing balance.", code="statement_does_not_add_up")
+    stmt.status, stmt.reconciled_at, stmt.reconciled_by = "RECONCILED", timezone.now(), actor_id
+    stmt.save(update_fields=["status", "reconciled_at", "reconciled_by", "updated_at"])
+    record_tenant_event(current_tenant(), "finance.bank_statement.reconciled", actor_user_id=actor_id, target_type="BankStatement", target_id=stmt.id, metadata={"bank_account": str(stmt.bank_account_id), "closing_balance": str(stmt.closing_balance), "lines": len(lines)}, request=request)
+    return stmt

@@ -13,7 +13,7 @@ from platform_core.tenant_audit.models import TenantAuditEvent
 from platform_core.tenants.models import ModuleEntitlement
 from platform_core.users import services as user_services
 from platform_core.users.models import TenantMembership
-from shared.api.errors import DomainError
+from shared.api.errors import DomainError, ValidationFailed
 from shared.api.pagination import StandardPagination
 
 
@@ -56,6 +56,25 @@ class UserList(APIView):
         page = paginator.paginate_queryset(qs, request)
         roles = _roles_by_user([m.user_id for m in page])
         return paginator.get_paginated_response([_membership_dict(m, roles) for m in page])
+
+
+class UserDirectory(APIView):
+    """Colleague lookup for pickers (delegate an approval, assign a task). Any active member may use it, so it exposes
+    the minimum: id and display name of ACTIVE members of this tenant. It matches on name only (never e-mail, which would
+    let a caller test whether an address is registered), needs at least two characters, and returns at most 20 rows."""
+
+    permission_classes = [IsTenantMember]
+
+    def get(self, request):
+        q = request.query_params.get("q", "").strip()
+        if len(q) < 2:
+            raise ValidationFailed("Type at least two characters.", code="query_too_short")
+        qs = (
+            TenantMembership.objects.filter(tenant=connection.tenant, status=TenantMembership.Status.ACTIVE, user__display_name__icontains=q[:100])
+            .select_related("user")
+            .order_by("user__display_name", "user_id")[:20]
+        )
+        return Response({"results": [{"id": str(m.user_id), "display_name": m.user.display_name} for m in qs]})
 
 
 class UserInvite(APIView):

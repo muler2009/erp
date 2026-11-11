@@ -1,0 +1,3 @@
+apiVersion: 1
+providers:
+  - {name: erp, folder: ERP, type: file, options: {path: /var/lib/grafana/dashboards}}

@@ -1,0 +1,42 @@
+groups:
+  - name: erp
+    rules:
+      - alert: ErpBackendDown
+        expr: up{job="erp-backend"} == 0
+        for: 2m
+        labels: {severity: critical}
+        annotations: {summary: "ERP backend is not scrapeable", runbook: "docs/operations/runbooks.md#backend-down"}
+      - alert: ErpHighErrorRate
+        expr: sum(rate(erp_http_requests_total{status=~"5.."}[5m])) / sum(rate(erp_http_requests_total[5m])) > 0.02
+        for: 5m
+        labels: {severity: critical}
+        annotations: {summary: "More than 2% of requests fail with 5xx", runbook: "docs/operations/runbooks.md#high-error-rate"}
+      - alert: ErpSlowRequests
+        expr: histogram_quantile(0.95, sum by (le) (rate(erp_http_request_seconds_bucket[5m]))) > 2
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: "p95 latency above 2s", runbook: "docs/operations/runbooks.md#slow-requests"}
+      - alert: ErpOutboxBacklog
+        expr: erp_outbox_oldest_pending_age_seconds > 900
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Domain events have waited more than 15 minutes (relay or broker problem)", runbook: "docs/operations/runbooks.md#event-backlog"}
+      - alert: ErpDeadLetteredEvents
+        expr: erp_outbox_dead_events > 0
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: "Dead-lettered domain events need an operator", runbook: "docs/operations/runbooks.md#event-backlog"}
+      - alert: ErpTenantProvisioningStuck
+        expr: erp_tenants{status=~"PROVISIONING_FAILED|MIGRATION_FAILED"} > 0
+        for: 15m
+        labels: {severity: warning}
+        annotations: {summary: "A tenant is in a failed lifecycle state", runbook: "docs/operations/runbooks.md#tenant-failed"}
+      - alert: ErpMetricsScanIncomplete
+        expr: erp_metrics_scan_ok == 0
+        for: 15m
+        labels: {severity: warning}
+        annotations: {summary: "Tenant-level gauges are incomplete (database error or more tenants than scanned)"}
+      - alert: ErpUnauthorizedMetricsScrapes
+        expr: increase(erp_security_events_total{event="metrics_unauthorized"}[10m]) > 5
+        labels: {severity: warning}
+        annotations: {summary: "Repeated unauthorized attempts on /metrics"}

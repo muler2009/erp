@@ -1,0 +1,173 @@
+openapi: 3.0.3
+info:
+  title: ERP Platform API
+  version: 1.0.0
+paths:
+  /api/v1/platform/access-grants:
+    post:
+      operationId: access_grants_create
+      tags:
+      - access-grants
+      responses:
+        '200':
+          description: No response body
+  /api/v1/platform/access-grants/{grant_id}/decision:
+    post:
+      operationId: access_grants_decision_create
+      parameters:
+      - in: path
+        name: grant_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - access-grants
+      responses:
+        '200':
+          description: No response body
+  /api/v1/platform/admins:
+    post:
+      operationId: admins_create
+      tags:
+      - admins
+      responses:
+        '200':
+          description: No response body
+  /api/v1/platform/admins/{admin_id}/approve:
+    post:
+      operationId: admins_approve_create
+      parameters:
+      - in: path
+        name: admin_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - admins
+      responses:
+        '200':
+          description: No response body
+  /api/v1/platform/audit-events:
+    get:
+      operationId: audit_events_retrieve
+      tags:
+      - audit-events
+      responses:
+        '200':
+          description: No response body
+  /api/v1/platform/me:
+    get:
+      operationId: me_retrieve
+      tags:
+      - me
+      responses:
+        '200':
+          description: No response body
+  /api/v1/platform/provisioning-jobs:
+    get:
+      operationId: provisioning_jobs_retrieve
+      tags:
+      - provisioning-jobs
+      responses:
+        '200':
+          description: No response body
+  /api/v1/platform/tenants:
+    get:
+      operationId: tenants_retrieve
+      tags:
+      - tenants
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: tenants_create
+      tags:
+      - tenants
+      responses:
+        '200':
+          description: No response body
+  /api/v1/platform/tenants/{tenant_id}:
+    get:
+      operationId: tenants_retrieve_2
+      parameters:
+      - in: path
+        name: tenant_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - tenants
+      responses:
+        '200':
+          description: No response body
+  /api/v1/platform/tenants/{tenant_id}/access/role-assignments:
+    get:
+      operationId: tenants_access_role_assignments_retrieve
+      description: 'Reads tenant-schema data: allowed only with an active, approved,
+        audited grant.'
+      parameters:
+      - in: path
+        name: tenant_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - tenants
+      responses:
+        '200':
+          description: No response body
+  /api/v1/platform/tenants/{tenant_id}/entitlements:
+    put:
+      operationId: tenants_entitlements_update
+      parameters:
+      - in: path
+        name: tenant_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - tenants
+      responses:
+        '200':
+          description: No response body
+  /api/v1/platform/tenants/{tenant_id}/lifecycle/{action}:
+    post:
+      operationId: tenants_lifecycle_create
+      parameters:
+      - in: path
+        name: action
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: tenant_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - tenants
+      responses:
+        '200':
+          description: No response body
+  /api/v1/platform/tenants/{tenant_id}/provision:
+    post:
+      operationId: tenants_provision_create
+      parameters:
+      - in: path
+        name: tenant_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - tenants
+      responses:
+        '200':
+          description: No response body
+components: {}

@@ -238,7 +238,8 @@ def step_entitlements(job, tenant):
 
 def step_identity_client(job, tenant):
     host = tenant_host(tenant)
-    get_provisioner().register_redirect_uris(f"{settings.PUBLIC_SCHEME}://{host}/auth/callback", f"{settings.PUBLIC_SCHEME}://{host}/")
+    base = f"{settings.PUBLIC_SCHEME}://{host}"
+    get_provisioner().register_redirect_uris(f"{base}/auth/callback", f"{base}/", spa_redirect_uri=f"{base}/signin-callback")
 
 
 def step_admin_identity(job, tenant):

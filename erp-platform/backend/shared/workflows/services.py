@@ -23,10 +23,17 @@ TERMINAL_TASK = {"APPROVED", "REJECTED", "CHANGES_REQUESTED", "SKIPPED", "DELEGA
 _SUBJECTS = {}  # subject_type -> {"on_outcome": callable|None}
 
 
-def register_subject(subject_type, *, on_outcome=None):
+def register_subject(subject_type, *, on_outcome=None, on_event=None):
     """A module declares which records it routes through approvals. `on_outcome(instance)` runs inside the
-    transaction that completes the workflow (APPROVED / REJECTED / CANCELLED)."""
-    _SUBJECTS[subject_type] = {"on_outcome": on_outcome}
+    transaction that completes the workflow (APPROVED / REJECTED / CANCELLED). `on_event(instance, event)` runs inside
+    the transaction for the non-terminal events CHANGES_REQUESTED and RESUBMITTED so the record can follow its approval."""
+    _SUBJECTS[subject_type] = {"on_outcome": on_outcome, "on_event": on_event}
+
+
+def _event_hook(instance, event):
+    hook = _SUBJECTS.get(instance.subject_type, {}).get("on_event")
+    if hook:
+        hook(instance, event)
 
 
 def registered_subjects():
@@ -270,6 +277,7 @@ def decide(actor_id, task_id, decision, comment=""):
         instance.status = "CHANGES_REQUESTED"
         instance.save(update_fields=["status"])
         _log(instance, "CHANGES_REQUESTED", actor_id, stage_order=task.stage_order, task=task, comment=comment)
+        _event_hook(instance, "CHANGES_REQUESTED")
         notifications.notify([instance.requester_id], "workflow.changes_requested", f"Changes requested: {instance.title or instance.subject_type}", comment, ref_type="workflow_instance", ref_id=instance.id, email=True)
         return instance
     task.status = "APPROVED"
@@ -341,6 +349,7 @@ def resubmit(actor_id, instance_id, *, comment="", amount=None):
     _log(instance, "RESUBMITTED", actor_id, comment=comment, amount=instance.amount)
     _validate_all_stages(instance)
     _open_stage(instance)
+    _event_hook(instance, "RESUBMITTED")
     return instance
 
 

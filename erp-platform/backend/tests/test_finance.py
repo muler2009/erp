@@ -438,8 +438,8 @@ def test_api_journal_and_account_rules(api_env):
     assert api["officer"].post("/api/v1/finance/accounts", {"code": "6000", "name": "X", "type": "EXPENSE"}).status_code == 403
     with schema_context("t_acme"):
         parent = m.Account.objects.get(code="5000")
-    assert api["mgr"].post("/api/v1/finance/accounts", {"code": "5700", "name": "Travel", "type": "EXPENSE", "parent": str(parent.id)}).status_code == 201
-    assert api["mgr"].post("/api/v1/finance/accounts", {"code": "5700", "name": "Dup", "type": "EXPENSE"}).status_code == 409
+    assert api["mgr"].post("/api/v1/finance/accounts", {"code": "6100", "name": "Travel", "type": "EXPENSE", "parent": str(parent.id)}).status_code == 201
+    assert api["mgr"].post("/api/v1/finance/accounts", {"code": "6100", "name": "Dup", "type": "EXPENSE"}).status_code == 409
     with schema_context("t_acme"):
         ctl = m.Account.objects.get(system_key="ar_control")
     assert api["mgr"].patch(f"/api/v1/finance/accounts/{ctl.id}", {"is_active": False}).status_code == 409
@@ -483,3 +483,132 @@ def test_concurrent_duplicate_payment_requests_create_one_payment(own_tenant):
         assert m.Payment.objects.count() == 1
         assert m.Invoice.objects.get(pk=inv.pk).paid_amount == D("115")
         assert reports.trial_balance(D0)["balanced"]
+
+
+# ----------------------------------------------------------------------------- bank reconciliation
+def _bank_ledger(f, receipts=("40", "75")):
+    """Two posted receipts on the USD bank account's ledger."""
+    inv = posted_invoice(f)  # 115
+    out = []
+    for i, amt in enumerate(receipts):
+        payment, _ = pay(f, inv, amt, f"rec-{i}")
+        out.append(payment.journal_entry.lines.get(account=f["bank_usd"].gl_account))
+    return out
+
+
+def _stmt(f, lines, opening="0", closing=None, bank=None):
+    total = sum(D(l["amount"]) for l in lines)
+    return fin.create_bank_statement(f["people"]["ctrl"].id, bank_account_id=(bank or f["bank_usd"]).id, statement_date=D0, opening_balance=opening, closing_balance=closing if closing is not None else D(opening) + total, lines=lines)
+
+
+@pytest.mark.django_db
+def test_bank_statement_must_add_up_and_have_valid_lines(f):
+    ctrl = f["people"]["ctrl"].id
+    ok = [{"date": "2026-03-15", "description": "x", "amount": "40"}]
+    with pytest.raises(ValidationFailed) as e:
+        fin.create_bank_statement(ctrl, bank_account_id=f["bank_usd"].id, statement_date=D0, opening_balance="0", closing_balance="41", lines=ok)
+    assert e.value.get_codes() == "statement_does_not_add_up"
+    for bad in ([], [{"date": "2026-03-15", "amount": "0"}], [{"date": "2026-03-15", "amount": "1.00001"}], [{"date": "nope", "amount": "1"}], [{"date": "2026-03-15", "amount": "abc"}]):
+        with pytest.raises(ValidationFailed):
+            fin.create_bank_statement(ctrl, bank_account_id=f["bank_usd"].id, statement_date=D0, opening_balance="0", closing_balance="1", lines=bad)
+    assert m.BankStatement.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_match_rules_and_full_reconciliation(f):
+    ctrl = f["people"]["ctrl"].id
+    l40, l75 = _bank_ledger(f)
+    st = _stmt(f, [{"date": "2026-03-15", "description": "Acme", "amount": "40"}, {"date": "2026-03-15", "description": "Acme", "amount": "75"}], opening="1000")
+    a, b = list(st.lines.all())
+    assert {c.id for c in fin.bank_match_candidates(st)} == {l40.id, l75.id}
+    assert [c.id for c in fin.bank_match_candidates(st, "40")] == [l40.id]
+    with pytest.raises(ValidationFailed) as e:
+        fin.match_bank_line(ctrl, a.id, l75.id)
+    assert e.value.get_codes() == "amount_mismatch"
+    other = m.JournalLine.objects.filter(account=f["ar"]).first()
+    with pytest.raises(ValidationFailed) as e:
+        fin.match_bank_line(ctrl, a.id, other.id)
+    assert e.value.get_codes() == "wrong_account"
+    fin.match_bank_line(ctrl, a.id, l40.id)
+    with pytest.raises(DomainError) as e:
+        fin.reconcile_bank_statement(ctrl, st.id)
+    assert e.value.get_codes() == "unmatched_lines"
+    st2 = _stmt(f, [{"date": "2026-03-15", "amount": "40"}])
+    with pytest.raises(DomainError) as e:  # one ledger line can back only one statement line
+        fin.match_bank_line(ctrl, st2.lines.get().id, l40.id)
+    assert e.value.get_codes() == "already_matched"
+    fin.unmatch_bank_line(ctrl, a.id)
+    fin.match_bank_line(ctrl, a.id, l40.id)
+    fin.match_bank_line(ctrl, b.id, l75.id)
+    done = fin.reconcile_bank_statement(ctrl, st.id)
+    assert done.status == "RECONCILED" and done.reconciled_by == ctrl
+    with pytest.raises(DomainError) as e:
+        fin.unmatch_bank_line(ctrl, a.id)  # locked once reconciled
+    assert e.value.get_codes() == "statement_reconciled"
+    with pytest.raises(DomainError):
+        fin.reconcile_bank_statement(ctrl, st.id)
+
+
+@pytest.mark.django_db
+def test_draft_and_other_bank_ledger_lines_cannot_be_matched(f):
+    ctrl, officer = f["people"]["ctrl"].id, f["people"]["officer"]
+    draft = fin.create_journal(officer.id, entry_date=D0, memo="d", lines=[jl("1010", debit="5"), jl("3100", credit="5")])
+    dline = draft.lines.get(account__code="1010")
+    st = _stmt(f, [{"date": "2026-03-15", "amount": "5"}])
+    assert dline.id not in {c.id for c in fin.bank_match_candidates(st)}
+    with pytest.raises(ValidationFailed) as e:
+        fin.match_bank_line(ctrl, st.lines.get().id, dline.id)
+    assert e.value.get_codes() == "not_posted"
+    eur = _stmt(f, [{"date": "2026-03-15", "amount": "5"}], bank=f["bank_eur"])
+    with pytest.raises(ValidationFailed) as e:
+        fin.match_bank_line(ctrl, eur.lines.get().id, dline.id)
+    assert e.value.get_codes() == "wrong_account"
+
+
+@pytest.mark.django_db
+def test_withdrawals_match_credits(f):
+    ctrl = f["people"]["ctrl"].id
+    bill = posted_invoice(f, kind="SUPPLIER_INVOICE")  # 115
+    payment, _ = pay(f, bill, "115", "out-1")
+    led = payment.journal_entry.lines.get(account=f["bank_usd"].gl_account)
+    assert led.credit == D("115")
+    st = _stmt(f, [{"date": "2026-03-15", "amount": "-115"}], opening="500")
+    assert [c.id for c in fin.bank_match_candidates(st, "-115")] == [led.id]
+    fin.match_bank_line(ctrl, st.lines.get().id, led.id)
+    assert fin.reconcile_bank_statement(ctrl, st.id).status == "RECONCILED"
+
+
+@pytest.mark.django_db
+def test_api_reconciliation_permissions_and_flow(api_env):
+    env, api = api_env
+    inv = {"kind": "CUSTOMER_INVOICE", "partner": str(env["cust"].id), "invoice_date": "2026-03-15", "lines": [{"description": "Work", "quantity": "1", "unit_price": "40", "account": str(env["rev"].id), "tax_rate": None}]}
+    iid = api["officer"].post("/api/v1/finance/invoices", inv).json()["id"]
+    api["officer"].post(f"/api/v1/finance/invoices/{iid}/submit")
+    api["mgr"].post(f"/api/v1/finance/invoices/{iid}/approve")
+    assert api["mgr2"].post(f"/api/v1/finance/invoices/{iid}/post").status_code == 200
+    pay_body = {"kind": "RECEIPT", "partner": str(env["cust"].id), "bank_account": str(env["bank_usd"].id), "payment_date": "2026-03-16", "allocations": [{"invoice": iid, "amount": "40"}]}
+    assert api["ctrl"].post("/api/v1/finance/payments", pay_body, **{"Idempotency-Key": "r1"}).status_code == 201
+
+    body = {"bank_account": str(env["bank_usd"].id), "statement_date": "2026-03-31", "opening_balance": "0", "closing_balance": "40", "lines": [{"date": "2026-03-16", "description": "Acme", "amount": "40"}]}
+    assert api["officer"].post("/api/v1/finance/bank-statements", body).status_code == 403
+    assert api["mgr"].post("/api/v1/finance/bank-statements", body).status_code == 403
+    assert api["auditor"].get("/api/v1/finance/bank-statements").status_code == 200  # viewing needs only accounts.view
+    assert api["ctrl"].post("/api/v1/finance/bank-statements", {**body, "closing_balance": "41"}).status_code == 400
+    made = api["ctrl"].post("/api/v1/finance/bank-statements", body)
+    assert made.status_code == 201
+    sid, lid = made.json()["id"], made.json()["lines"][0]["id"]
+
+    assert api["auditor"].get(f"/api/v1/finance/bank-statements/{sid}/candidates").status_code == 403
+    assert api["auditor"].post(f"/api/v1/finance/bank-statements/{sid}/reconcile").status_code == 403
+    assert api["ctrl"].post(f"/api/v1/finance/bank-statements/{sid}/reconcile").status_code == 409  # unmatched line
+    cands = api["ctrl"].get(f"/api/v1/finance/bank-statements/{sid}/candidates?amount=40").json()["results"]
+    assert len(cands) == 1 and cands[0]["amount"] == "40.0000"
+    assert api["ctrl"].get(f"/api/v1/finance/bank-statements/{sid}/candidates?amount=41").json()["results"] == []
+    assert api["mgr"].post(f"/api/v1/finance/bank-statements/{sid}/lines/{lid}/match", {"journal_line": cands[0]["id"]}).status_code == 403
+    assert api["ctrl"].post(f"/api/v1/finance/bank-statements/{sid}/lines/{lid}/match", {"journal_line": cands[0]["id"]}).status_code == 200
+    detail = api["auditor"].get(f"/api/v1/finance/bank-statements/{sid}").json()
+    assert detail["lines"][0]["matched"] is True and detail["lines"][0]["ledger_entry"].startswith("JV-")
+    assert api["ctrl"].get(f"/api/v1/finance/bank-statements/{sid}/candidates").json()["results"] == []  # claimed lines are not offered again
+    done = api["ctrl"].post(f"/api/v1/finance/bank-statements/{sid}/reconcile")
+    assert done.status_code == 200 and done.json()["status"] == "RECONCILED"
+    assert api["ctrl"].post(f"/api/v1/finance/bank-statements/{sid}/lines/{lid}/unmatch").status_code == 409

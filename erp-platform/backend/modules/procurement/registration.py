@@ -7,6 +7,9 @@ R = NumberSequence.Reset
 register_default_sequence("procurement.requisition", "Purchase requisitions", "PR-{yyyy}-{seq:05d}", R.YEARLY)
 register_default_sequence("procurement.rfq", "Requests for quotation", "RFQ-{yyyy}-{seq:05d}", R.YEARLY)
 register_default_sequence("procurement.purchase_order", "Purchase orders", "PO-{yyyy}-{seq:05d}", R.YEARLY)
+register_default_sequence("procurement.supplier_return", "Supplier returns", "SR-{yyyy}-{seq:05d}", R.YEARLY)
+register_default_sequence("procurement.claim", "Supplier claims", "CL-{yyyy}-{seq:05d}", R.YEARLY)
+register_default_sequence("procurement.contract", "Supplier contracts", "CT-{yyyy}-{seq:05d}", R.YEARLY)
 register_default_sequence("procurement.goods_receipt", "Goods receipts", "GR-{yyyy}-{seq:05d}", R.YEARLY)
 
 register_event("procurement.purchase_order.approved", required=["po_id", "number", "supplier_id", "total", "currency"])
@@ -40,3 +43,9 @@ def _install_finance_hooks():
 
 
 _install_finance_hooks()
+
+from shared.files import services as _files  # noqa: E402
+
+_files.register_access_check("procurement.requisition", lambda u, rid: __import__("modules.procurement.requisitions_ext", fromlist=["x"]).can_read_attachment(u, rid))
+
+_files.register_access_check("procurement.receipt", lambda u, rid: __import__("modules.procurement.receiving", fromlist=["x"]).can_read_evidence(u, rid))

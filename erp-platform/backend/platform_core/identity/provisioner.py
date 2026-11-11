@@ -25,7 +25,7 @@ class IdentityProvisioner:
     def send_required_actions_email(self, subject: str) -> None:
         raise NotImplementedError
 
-    def register_redirect_uris(self, redirect_uri: str, post_logout_uri: str) -> None:
+    def register_redirect_uris(self, redirect_uri: str, post_logout_uri: str, spa_redirect_uri: str = "") -> None:
         raise NotImplementedError
 
     def disable_user(self, subject: str) -> None:
@@ -100,8 +100,7 @@ class KeycloakAdminClient(IdentityProvisioner):
         )
         response.raise_for_status()
 
-    def register_redirect_uris(self, redirect_uri, post_logout_uri):
-        client_uuid = self.cfg["BFF_CLIENT_UUID"]
+    def _add_uris(self, client_uuid, redirect_uri, post_logout_uri):
         headers = self._headers()
         url = f"{self.base}/clients/{client_uuid}"
         current = requests.get(url, headers=headers, timeout=self.timeout)
@@ -115,8 +114,14 @@ class KeycloakAdminClient(IdentityProvisioner):
         uris.add(redirect_uri)
         logout_uris.add(post_logout_uri)
         client["redirectUris"] = sorted(uris)
+        client["webOrigins"] = sorted(set(client.get("webOrigins", [])) | {post_logout_uri.rstrip("/")})
         attrs["post.logout.redirect.uris"] = "##".join(sorted(logout_uris))
         requests.put(url, json=client, headers=headers, timeout=self.timeout).raise_for_status()
+
+    def register_redirect_uris(self, redirect_uri, post_logout_uri, spa_redirect_uri=""):
+        self._add_uris(self.cfg["BFF_CLIENT_UUID"], redirect_uri, post_logout_uri)
+        if spa_redirect_uri and self.cfg.get("SPA_CLIENT_UUID"):
+            self._add_uris(self.cfg["SPA_CLIENT_UUID"], spa_redirect_uri, post_logout_uri)
 
     def disable_user(self, subject):
         requests.put(f"{self.base}/users/{subject}", json={"enabled": False}, headers=self._headers(), timeout=self.timeout).raise_for_status()

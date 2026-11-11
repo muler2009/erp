@@ -74,6 +74,13 @@ TENANT_APPS = [
     "modules.crm",
     "modules.sales",
     "modules.hr",
+    "modules.assets",
+    "modules.projects",
+    "modules.manufacturing",
+    "modules.supply_chain",
+    "modules.documents",
+    "modules.quality",
+    "modules.analytics",
 ]
 INSTALLED_APPS = list(SHARED_APPS) + [a for a in TENANT_APPS if a not in SHARED_APPS]
 
@@ -87,14 +94,18 @@ AUTH_USER_MODEL = "users.User"
 AUTHENTICATION_BACKENDS = ["django.contrib.auth.backends.ModelBackend"]
 
 MIDDLEWARE = [
+    "shared.metrics.MetricsMiddleware",
     "shared.middleware.CorrelationIdMiddleware",
+    "shared.middleware.OperationalEndpointsMiddleware",
     "shared.middleware.TenantRoutingMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "shared.middleware.TenantStatusMiddleware",
+    "shared.middleware.SecurityHeadersMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls_tenant"
@@ -132,6 +143,14 @@ CSRF_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_HTTPONLY = False  # the SPA reads it to send X-CSRFToken
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
+SECURE_REFERRER_POLICY = "no-referrer"
+# Transport security. Only meaningful behind TLS, so it is on whenever DEBUG is off and the proxy is declared.
+_TLS = (not DEBUG) and env_bool("ERP_BEHIND_PROXY")
+SECURE_HSTS_SECONDS = int(env("ERP_HSTS_SECONDS", 31536000 if _TLS else 0))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _TLS
+SECURE_SSL_REDIRECT = _TLS and env_bool("ERP_SSL_REDIRECT", True)
+SECURE_REDIRECT_EXEMPT = [r"^healthz$", r"^readyz$", r"^metrics$"]  # probes and scrapes come from inside the cluster over HTTP
+METRICS_TOKEN = env("ERP_METRICS_TOKEN", "")
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https") if env_bool("ERP_BEHIND_PROXY") else None
 
 # ---------------------------------------------------------------- DRF
@@ -163,6 +182,9 @@ OIDC = {
     "CLIENT_ID": env("OIDC_CLIENT_ID", "erp-bff"),
     "CLIENT_SECRET": env("OIDC_CLIENT_SECRET", ""),
     "API_AUDIENCE": env("OIDC_API_AUDIENCE", "erp-api"),
+    # Public client used by the React SPA (authorization code + PKCE, no secret). Its access tokens carry audience erp-api.
+    "SPA_CLIENT_ID": env("OIDC_SPA_CLIENT_ID", "erp-spa"),
+    "SPA_SCOPES": "openid profile email",
     "SCOPES": "openid profile email",
     "ALGORITHMS": ["RS256"],
     "LEEWAY_SECONDS": 30,
@@ -177,6 +199,7 @@ KEYCLOAK_ADMIN = {
     "CLIENT_ID": env("KEYCLOAK_ADMIN_CLIENT_ID", "erp-identity-admin"),
     "CLIENT_SECRET": env("KEYCLOAK_ADMIN_CLIENT_SECRET", ""),
     "BFF_CLIENT_UUID": env("KEYCLOAK_BFF_CLIENT_UUID", ""),
+    "SPA_CLIENT_UUID": env("KEYCLOAK_SPA_CLIENT_UUID", ""),
 }
 IDENTITY_PROVISIONER = env("ERP_IDENTITY_PROVISIONER", "platform_core.identity.provisioner.KeycloakAdminClient")
 # Platform admins must have authenticated with MFA (amr claim contains otp/mfa/hwk).
@@ -202,6 +225,15 @@ CELERY_BEAT_SCHEDULE = {
     "hr-daily": {"task": "hr.daily_all", "schedule": 86400},
     "crm-daily": {"task": "crm.daily_all", "schedule": 3600.0},
     "sales-daily": {"task": "sales.daily_all", "schedule": 3600.0},
+    "inventory-daily": {"task": "inventory.daily_all", "schedule": 3600.0},
+    "procurement-daily": {"task": "procurement.daily_all", "schedule": 3600.0},
+    "assets-daily": {"task": "assets.daily_all", "schedule": 3600.0},
+    "projects-daily": {"task": "projects.daily_all", "schedule": 3600.0},
+    "manufacturing-daily": {"task": "manufacturing.daily_all", "schedule": 3600.0},
+    "supply-chain-daily": {"task": "supply_chain.daily_all", "schedule": 3600.0},
+    "documents-daily": {"task": "documents.daily_all", "schedule": 3600.0},
+    "quality-daily": {"task": "quality.daily_all", "schedule": 3600.0},
+    "analytics-daily": {"task": "analytics.daily_all", "schedule": 3600.0},
 }
 
 # ---------------------------------------------------------------- events / files

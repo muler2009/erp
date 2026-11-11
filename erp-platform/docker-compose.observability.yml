@@ -1,0 +1,23 @@
+# Add-on stack:  docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
+# Requires ERP_METRICS_TOKEN in .env; the same value is mounted for Prometheus below.
+services:
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    volumes:
+      - ./infrastructure/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./infrastructure/monitoring/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./.metrics_token:/etc/prometheus/metrics_token:ro   # create with: printf %s "$ERP_METRICS_TOKEN" > .metrics_token
+    ports: ["127.0.0.1:9090:9090"]
+    depends_on: [backend]
+  grafana:
+    image: grafana/grafana:11.3.0
+    environment: {GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD:-change-me}", GF_USERS_ALLOW_SIGN_UP: "false"}
+    volumes:
+      - ./infrastructure/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infrastructure/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on: [prometheus]
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    environment: {DATA_SOURCE_NAME: "postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}?sslmode=disable"}
+    depends_on: {postgres: {condition: service_healthy}}

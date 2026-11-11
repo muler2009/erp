@@ -1,0 +1,205 @@
+# Reference manifests (apply with kustomize or kubectl). Replace image, hostnames and the Secret before use.
+# Secrets are NOT in this file: create `erp-secrets` from your secret manager (see docs/operations/deployment.md).
+apiVersion: v1
+kind: Namespace
+metadata: {name: erp}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: erp-config, namespace: erp}
+data:
+  DJANGO_DEBUG: "false"
+  DJANGO_ALLOWED_HOSTS: ".erp.example.com,platform.erp.example.com"
+  ERP_BASE_DOMAIN: erp.example.com
+  ERP_PLATFORM_HOST: platform.erp.example.com
+  ERP_PUBLIC_SCHEME: https
+  ERP_BEHIND_PROXY: "true"
+  DB_HOST: postgres.erp.svc
+  DB_PORT: "5432"
+  CELERY_BROKER_URL: redis://redis.erp.svc:6379/0
+  FILE_STORAGE_ROOT: /data/files
+  PROMETHEUS_MULTIPROC_DIR: /tmp/prom
+  ERP_LOG_LEVEL: INFO
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: erp-backend, namespace: erp, labels: {app: erp-backend}}
+spec:
+  replicas: 3
+  strategy: {type: RollingUpdate, rollingUpdate: {maxUnavailable: 0, maxSurge: 1}}
+  selector: {matchLabels: {app: erp-backend}}
+  template:
+    metadata:
+      labels: {app: erp-backend}
+      annotations: {prometheus.io/scrape: "true", prometheus.io/port: "8000", prometheus.io/path: /metrics}
+    spec:
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, fsGroup: 10001, seccompProfile: {type: RuntimeDefault}}
+      terminationGracePeriodSeconds: 45
+      containers:
+        - name: backend
+          image: registry.example.com/erp/backend:CHANGE_ME
+          command: [gunicorn, config.wsgi:application, --bind, "0.0.0.0:8000", --workers, "3", --graceful-timeout, "30", --timeout, "60", --max-requests, "1000", --max-requests-jitter, "100"]
+          ports: [{containerPort: 8000, name: http}]
+          envFrom: [{configMapRef: {name: erp-config}}, {secretRef: {name: erp-secrets}}]
+          resources: {requests: {cpu: 250m, memory: 384Mi}, limits: {memory: 768Mi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          startupProbe: {httpGet: {path: /healthz, port: http}, failureThreshold: 30, periodSeconds: 2}
+          livenessProbe: {httpGet: {path: /healthz, port: http}, periodSeconds: 10, failureThreshold: 3}
+          readinessProbe: {httpGet: {path: /readyz, port: http}, periodSeconds: 5, failureThreshold: 2}
+          lifecycle: {preStop: {exec: {command: [sleep, "5"]}}}
+          volumeMounts: [{name: tmp, mountPath: /tmp}, {name: files, mountPath: /data/files}]
+      volumes:
+        - {name: tmp, emptyDir: {}}
+        - {name: files, persistentVolumeClaim: {claimName: erp-files}}
+      topologySpreadConstraints:
+        - {maxSkew: 1, topologyKey: kubernetes.io/hostname, whenUnsatisfiable: ScheduleAnyway, labelSelector: {matchLabels: {app: erp-backend}}}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: erp-backend, namespace: erp}
+spec: {selector: {app: erp-backend}, ports: [{name: http, port: 8000, targetPort: http}]}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: erp-worker, namespace: erp, labels: {app: erp-worker}}
+spec:
+  replicas: 2
+  selector: {matchLabels: {app: erp-worker}}
+  template:
+    metadata: {labels: {app: erp-worker}}
+    spec:
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, fsGroup: 10001, seccompProfile: {type: RuntimeDefault}}
+      terminationGracePeriodSeconds: 120   # lets running tasks finish (acks_late re-queues the rest)
+      containers:
+        - name: worker
+          image: registry.example.com/erp/backend:CHANGE_ME
+          command: [celery, -A, config, worker, -l, info, --concurrency=4]
+          envFrom: [{configMapRef: {name: erp-config}}, {secretRef: {name: erp-secrets}}]
+          resources: {requests: {cpu: 250m, memory: 384Mi}, limits: {memory: 768Mi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts: [{name: tmp, mountPath: /tmp}, {name: files, mountPath: /data/files}]
+      volumes:
+        - {name: tmp, emptyDir: {}}
+        - {name: files, persistentVolumeClaim: {claimName: erp-files}}
+---
+# Beat MUST stay at exactly one replica with Recreate: two schedulers would double-fire every job.
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: erp-beat, namespace: erp, labels: {app: erp-beat}}
+spec:
+  replicas: 1
+  strategy: {type: Recreate}
+  selector: {matchLabels: {app: erp-beat}}
+  template:
+    metadata: {labels: {app: erp-beat}}
+    spec:
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: beat
+          image: registry.example.com/erp/backend:CHANGE_ME
+          command: [celery, -A, config, beat, -l, info, --schedule=/tmp/celerybeat-schedule]
+          envFrom: [{configMapRef: {name: erp-config}}, {secretRef: {name: erp-secrets}}]
+          resources: {requests: {cpu: 50m, memory: 128Mi}, limits: {memory: 256Mi}}
+          securityContext: {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: [ALL]}}
+          volumeMounts: [{name: tmp, mountPath: /tmp}]
+      volumes: [{name: tmp, emptyDir: {}}]
+---
+# Run before each rollout (a Job per release): shared schema first, then every tenant schema.
+apiVersion: batch/v1
+kind: Job
+metadata: {name: erp-migrate, namespace: erp}
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext: {runAsNonRoot: true, runAsUser: 10001, seccompProfile: {type: RuntimeDefault}}
+      containers:
+        - name: migrate
+          image: registry.example.com/erp/backend:CHANGE_ME
+          command: [sh, -c, "python manage.py migrate_schemas --shared && python manage.py migrate_tenants"]
+          envFrom: [{configMapRef: {name: erp-config}}, {secretRef: {name: erp-secrets}}]
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata: {name: erp-backend, namespace: erp}
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: erp-backend}
+  minReplicas: 3
+  maxReplicas: 12
+  metrics: [{type: Resource, resource: {name: cpu, target: {type: Utilization, averageUtilization: 65}}}]
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata: {name: erp-backend, namespace: erp}
+spec: {minAvailable: 2, selector: {matchLabels: {app: erp-backend}}}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata: {name: erp-files, namespace: erp}
+spec: {accessModes: [ReadWriteMany], resources: {requests: {storage: 50Gi}}}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: erp
+  namespace: erp
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: 12m
+    nginx.ingress.kubernetes.io/limit-rps: "30"
+    nginx.ingress.kubernetes.io/server-snippet: |
+      location = /metrics { return 404; }
+spec:
+  ingressClassName: nginx
+  tls: [{hosts: ["*.erp.example.com", platform.erp.example.com], secretName: erp-tls}]
+  rules:
+    - host: "*.erp.example.com"
+      http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: erp-backend, port: {name: http}}}}]}
+    - host: platform.erp.example.com
+      http: {paths: [{path: /, pathType: Prefix, backend: {service: {name: erp-backend, port: {name: http}}}}]}
+---
+# Only the ingress controller and Prometheus may reach the backend; workers need no inbound traffic.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: erp-backend-ingress, namespace: erp}
+spec:
+  podSelector: {matchLabels: {app: erp-backend}}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: ingress-nginx}}
+        - namespaceSelector: {matchLabels: {kubernetes.io/metadata.name: monitoring}}
+      ports: [{port: 8000}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: {name: erp-workers-no-ingress, namespace: erp}
+spec:
+  podSelector: {matchExpressions: [{key: app, operator: In, values: [erp-worker, erp-beat]}]}
+  policyTypes: [Ingress]
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata: {name: erp-backup, namespace: erp}
+spec:
+  schedule: "15 1 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: backup
+              image: registry.example.com/erp/backup:CHANGE_ME   # postgres client + infrastructure/backup scripts
+              command: [sh, -c, "/scripts/backup.sh && /scripts/verify-restore.sh"]
+              envFrom: [{secretRef: {name: erp-backup-secrets}}]
+              env: [{name: BACKUP_DIR, value: /backups}, {name: FILE_STORAGE_ROOT, value: /data/files}]
+              volumeMounts: [{name: backups, mountPath: /backups}, {name: files, mountPath: /data/files, readOnly: true}]
+          volumes:
+            - {name: backups, persistentVolumeClaim: {claimName: erp-backups}}
+            - {name: files, persistentVolumeClaim: {claimName: erp-files}}

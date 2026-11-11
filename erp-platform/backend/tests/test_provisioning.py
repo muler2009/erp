@@ -43,6 +43,7 @@ def test_provisioning_creates_a_complete_active_tenant(world, fake_identity):
     assert membership.status == "ACTIVE"
     assert ExternalIdentity.objects.filter(user=membership.user).count() == 1  # fresh Keycloak account linked
     assert f"http://initech.localhost/auth/callback" in fake_identity.redirect_uris
+    assert "http://initech.localhost/signin-callback" in fake_identity.redirect_uris  # the browser app is registered too
     assert [m.to for m in mail.outbox][-1] == ["boss@initech.test"]
     assert connection.schema_name == "public"
 

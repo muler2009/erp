@@ -295,3 +295,16 @@ def test_administrative_changes_are_audited(owner_api, member_factory):
     actions = [e["action"] for e in owner_api.get("/api/v1/audit-events").json()["results"]]
     for expected in ("user.invited", "membership.activated", "membership.deactivated"):
         assert expected in actions
+
+
+@pytest.mark.django_db
+def test_user_directory_is_minimal_and_open_to_any_active_member(member_factory):
+    emp, _ = member_factory("emp9@acme.test", "emp9-sub", ["employee"])  # no users.view
+    assert emp.get("/api/v1/users").status_code == 403
+    response = emp.get("/api/v1/directory/users?q=emp9")
+    assert response.status_code == 200
+    rows = response.json()["results"]
+    assert rows and set(rows[0]) == {"id", "display_name"}  # no e-mail, status or roles
+    assert emp.get("/api/v1/directory/users?q=e").status_code == 400  # too short: no enumeration
+    assert emp.get("/api/v1/directory/users").status_code == 400
+    assert emp.get("/api/v1/directory/users?q=acme.test").json()["results"] == []  # e-mail is not searchable

@@ -39,7 +39,7 @@ def _get(model, pk, label):
 
 # ----------------------------------------------------------------------------- master data
 @transaction.atomic
-def create_product(actor_id, *, sku, name, uom="unit", barcode=None, category="", tracking="NONE", is_stocked=True, variant_of_id=None, attributes=None):
+def create_product(actor_id, *, sku, name, uom="unit", barcode=None, category="", tracking="NONE", is_stocked=True, variant_of_id=None, attributes=None, **extra):
     sku = sku.strip()
     if not sku or m.Product.objects.filter(sku=sku).exists():
         raise DomainError("A product with this SKU already exists.", code="sku_taken")
@@ -50,13 +50,16 @@ def create_product(actor_id, *, sku, name, uom="unit", barcode=None, category=""
     parent = _get(m.Product, variant_of_id, "Parent product") if variant_of_id else None
     if parent and parent.variant_of_id:
         raise ValidationFailed("Variants cannot have variants.", code="invalid_variant")
-    product = m.Product.objects.create(sku=sku, name=name, uom=uom, barcode=barcode or None, category=category, tracking=tracking, is_stocked=is_stocked, variant_of=parent, attributes=attributes or {})
+    from modules.inventory import items
+    extra = items.clean_extra(extra, uom=uom)
+    is_stocked = extra.pop("is_stocked", is_stocked)
+    product = m.Product.objects.create(sku=sku, name=name, uom=uom, barcode=barcode or None, category=category, tracking=tracking, is_stocked=is_stocked, variant_of=parent, attributes=attributes or {}, **extra)
     record_tenant_event(current_tenant(), "inventory.product.created", actor_user_id=actor_id, target_type="Product", target_id=product.id, metadata={"sku": sku})
     return product
 
 
 @transaction.atomic
-def update_product(actor_id, product_id, *, name=None, barcode=None, category=None, is_active=None):
+def update_product(actor_id, product_id, *, name=None, barcode=None, category=None, is_active=None, **extra):
     p = m.Product.objects.select_for_update().filter(pk=product_id).first() or _get(m.Product, product_id, "Product")
     if name is not None:
         p.name = name
@@ -70,23 +73,34 @@ def update_product(actor_id, product_id, *, name=None, barcode=None, category=No
         raise DomainError("A product with stock on hand cannot be deactivated.", code="stock_on_hand")
     if is_active is not None:
         p.is_active = is_active
+        p.status = "ACTIVE" if is_active else "INACTIVE"
+    from modules.inventory import items
+    extra = items.clean_extra({k: v for k, v in extra.items() if v is not None}, uom=p.uom, product=p)
+    if extra.get("status") in ("INACTIVE", "DISCONTINUED") and p.levels.filter(quantity__gt=0).exists() and extra["status"] == "INACTIVE":
+        raise DomainError("A product with stock on hand cannot be deactivated.", code="stock_on_hand")
+    for k, v in extra.items():
+        setattr(p, k, v)
+    if "status" in extra:
+        p.is_active = extra["status"] != "INACTIVE"
     p.save()
     return p
 
 
 @transaction.atomic
-def create_warehouse(actor_id, *, code, name):
+def create_warehouse(actor_id, *, code, name, **attrs):
+    from modules.inventory import structure
     if m.Warehouse.objects.filter(code=code).exists():
         raise DomainError("A warehouse with this code already exists.", code="code_taken")
-    return m.Warehouse.objects.create(code=code, name=name)
+    return m.Warehouse.objects.create(code=code, name=name, **structure.clean_warehouse(attrs))
 
 
 @transaction.atomic
-def create_location(actor_id, *, warehouse_id, code, name=""):
+def create_location(actor_id, *, warehouse_id, code, name="", **attrs):
+    from modules.inventory import structure
     wh = _get(m.Warehouse, warehouse_id, "Warehouse")
     if m.Location.objects.filter(warehouse=wh, code=code).exists():
         raise DomainError("A location with this code already exists in the warehouse.", code="code_taken")
-    return m.Location.objects.create(warehouse=wh, code=code, name=name)
+    return m.Location.objects.create(warehouse=wh, code=code, name=name, **structure.clean_location(attrs))
 
 
 @transaction.atomic
@@ -124,6 +138,8 @@ def _lot(product, lot_code, expiry=None, create=False):
         if lot is None:
             if not create:
                 raise DomainError("Unknown lot for this product.", code="lot_not_found", status_code=404)
+            if product.tracks_expiry and not expiry:
+                raise ValidationFailed("This product expires: an expiry date is required for a new lot.", code="expiry_required")
             lot = m.Lot.objects.create(product=product, code=lot_code, expiry_date=expiry)
         return lot
     if lot_code:
@@ -155,9 +171,16 @@ def _move(actor_id, product, location, lot, mtype, signed_qty, unit_cost, *, ref
 
 
 def _take(cost, qty):
-    """Value of `qty` leaving stock at weighted-average cost; keeps the cost row consistent (no drift)."""
+    """Value of `qty` leaving stock (weighted average, or FIFO layers for FIFO products); keeps the cost row consistent (no drift)."""
     if qty > cost.quantity:
         raise DomainError("Insufficient stock.", code="insufficient_stock")
+    if cost.product.costing_method == "FIFO":
+        from modules.inventory import valuation
+        value = valuation.fifo_take(cost, qty)
+        cost.quantity -= qty
+        cost.total_value -= value
+        cost.save(update_fields=["quantity", "total_value"])
+        return value
     value = cost.total_value if qty == cost.quantity else _q(qty * cost.total_value / cost.quantity)
     cost.quantity -= qty
     cost.total_value -= value
@@ -170,7 +193,7 @@ def _decimals():
 
 
 @transaction.atomic
-def receive_stock(actor_id, *, product_id, location_id, quantity, unit_cost, lot_code=None, expiry_date=None, ref_type="", ref_id="", reason="", counter="inventory_adjustment", on_date=None):
+def receive_stock(actor_id, *, product_id, location_id, quantity, unit_cost, lot_code=None, expiry_date=None, ref_type="", ref_id="", reason="", counter="inventory_adjustment", on_date=None, serials=None, warranty_until=None):
     """Put stock in at a known base-currency unit cost. `counter` is the GL system account credited
     (`grni` for purchase receipts; `inventory_adjustment` for opening balances / manual receipts)."""
     qty, cost_each = _dec(quantity), _dec(unit_cost, "unit_cost")
@@ -179,6 +202,11 @@ def receive_stock(actor_id, *, product_id, location_id, quantity, unit_cost, lot
     product, loc = _product(product_id), _location(location_id)
     lot = _lot(product, lot_code, expiry_date, create=True)
     on_date = on_date or timezone.now().date()
+    from modules.inventory import structure
+    structure.check_capacity(loc, qty)
+    structure.check_frozen(loc)
+    from modules.inventory import tracking
+    tracking.on_receive(product, loc, qty, serials, f"{ref_type}:{ref_id}", warranty_until)
     cost = _cost_row(product)
     level = _level_row(product, loc, lot)
     value = _q(qty * cost_each, _decimals())
@@ -188,16 +216,27 @@ def receive_stock(actor_id, *, product_id, location_id, quantity, unit_cost, lot
     cost.total_value += value
     cost.save(update_fields=["quantity", "total_value"])
     entry = finance.post_system_journal(actor_id, on_date, f"Stock receipt {product.sku}", "inventory", f"{ref_type}:{ref_id}", [("inventory", "debit", value), (counter, "credit", value)])
-    return _move(actor_id, product, loc, lot, "RECEIPT", qty, cost_each, ref_type=ref_type, ref_id=ref_id, reason=reason, journal_id=entry.id if entry else None)
+    mv = _move(actor_id, product, loc, lot, "RECEIPT", qty, cost_each, ref_type=ref_type, ref_id=ref_id, reason=reason, journal_id=entry.id if entry else None)
+    if product.costing_method == "FIFO":
+        from modules.inventory import valuation
+        valuation.add_layer(product, mv.id, qty, value)
+    return mv
 
 
 @transaction.atomic
-def issue_stock(actor_id, *, product_id, location_id, quantity, lot_code=None, reason="", ref_type="", ref_id="", on_date=None):
+def issue_stock(actor_id, *, product_id, location_id, quantity, lot_code=None, reason="", ref_type="", ref_id="", on_date=None, serials=None, allow_expired=False, counter="cogs", from_quarantine=False):
     qty = _dec(quantity)
     if qty <= 0:
         raise ValidationFailed("quantity must be positive.", code="invalid_amount")
     product, loc = _product(product_id), _location(location_id)
     lot = _lot(product, lot_code)
+    from modules.inventory import structure
+    structure.check_can_issue(loc, actor_id, allow_quarantine=from_quarantine)
+    structure.check_frozen(loc)
+    from modules.inventory import tracking
+    tracking.check_lot_issuable(lot, on_date, allow_expired)
+    structure.run_issue_guards(product, loc, lot, purpose="issue")
+    tracking.on_issue(product, loc, qty, serials, f"{ref_type}:{ref_id}")
     cost = _cost_row(product)
     level = _level_row(product, loc, lot)
     if level.quantity < qty:
@@ -205,17 +244,25 @@ def issue_stock(actor_id, *, product_id, location_id, quantity, lot_code=None, r
     value = _take(cost, qty)
     level.quantity -= qty
     level.save(update_fields=["quantity", "updated_at"])
-    entry = finance.post_system_journal(actor_id, on_date or timezone.now().date(), f"Stock issue {product.sku}", "inventory", f"{ref_type}:{ref_id}", [("cogs", "debit", value), ("inventory", "credit", value)])
+    entry = finance.post_system_journal(actor_id, on_date or timezone.now().date(), f"Stock issue {product.sku}", "inventory", f"{ref_type}:{ref_id}", [(counter, "debit", value), ("inventory", "credit", value)])
     return _move(actor_id, product, loc, lot, "ISSUE", -qty, _q(value / qty), ref_type=ref_type, ref_id=ref_id, reason=reason, journal_id=entry.id if entry else None)
 
 
 @transaction.atomic
-def transfer_stock(actor_id, *, product_id, from_location_id, to_location_id, quantity, lot_code=None, reason=""):
+def transfer_stock(actor_id, *, product_id, from_location_id, to_location_id, quantity, lot_code=None, reason="", serials=None):
     qty = _dec(quantity)
     if qty <= 0 or str(from_location_id) == str(to_location_id):
         raise ValidationFailed("Transfer needs a positive quantity and two different locations.", code="invalid_transfer")
     product, src, dst = _product(product_id), _location(from_location_id), _location(to_location_id)
     lot = _lot(product, lot_code)
+    from modules.inventory import structure
+    structure.check_can_transfer_out(src, actor_id)
+    structure.check_capacity(dst, qty)
+    structure.check_frozen(src)
+    structure.check_frozen(dst)
+    structure.run_issue_guards(product, src, lot, purpose="transfer", dest=dst)
+    from modules.inventory import tracking
+    tracking.on_transfer(product, src, dst, qty, serials)
     cost = _cost_row(product)
     # lock both level rows in a stable order so two opposite transfers cannot deadlock
     for loc in sorted([src, dst], key=lambda l: str(l.id)):
@@ -235,15 +282,19 @@ def transfer_stock(actor_id, *, product_id, from_location_id, to_location_id, qu
 
 
 @transaction.atomic
-def adjust_stock(actor_id, *, product_id, location_id, delta=None, counted_quantity=None, lot_code=None, unit_cost=None, reason, on_date=None):
+def adjust_stock(actor_id, *, product_id, location_id, delta=None, counted_quantity=None, lot_code=None, unit_cost=None, reason, on_date=None, approved=False, count_posting=False):
     """Manual correction. Pass `delta`, or `counted_quantity` (cycle count: adjusts to the counted figure)."""
     if not (reason or "").strip():
         raise ValidationFailed("A reason is required for stock adjustments.", code="reason_required")
     if (delta is None) == (counted_quantity is None):
         raise ValidationFailed("Provide exactly one of delta or counted_quantity.", code="invalid_amount")
     product, loc = _product(product_id), _location(location_id)
+    if product.tracking == "SERIAL":
+        raise DomainError("Serial-tracked items are corrected by serial number (receive / scrap), not by quantity.", code="serial_adjust_not_allowed")
     lot = _lot(product, lot_code, create=True)
     cost = _cost_row(product)
+    from modules.inventory import structure
+    structure.check_frozen(loc, allow_count_posting=count_posting)
     level = _level_row(product, loc, lot)
     change = _dec(delta, "delta") if delta is not None else _dec(counted_quantity, "counted_quantity") - level.quantity
     if counted_quantity is not None and _dec(counted_quantity, "counted_quantity") < 0:
@@ -251,6 +302,9 @@ def adjust_stock(actor_id, *, product_id, location_id, delta=None, counted_quant
     if change == 0:
         raise DomainError("The counted quantity equals the system quantity; nothing to adjust.", code="no_difference")
     on_date = on_date or timezone.now().date()
+    if not approved:
+        from modules.inventory import adjustments
+        adjustments.enforce_threshold(change, unit_cost, cost)
     if change > 0:
         each = _dec(unit_cost, "unit_cost") if unit_cost is not None else cost.average
         value = _q(change * each, _decimals())
@@ -270,6 +324,9 @@ def adjust_stock(actor_id, *, product_id, location_id, delta=None, counted_quant
         cost.save(update_fields=["quantity", "total_value"])
     entry = finance.post_system_journal(actor_id, on_date, f"Stock adjustment {product.sku}: {reason}", "inventory", f"adjust:{product.sku}", legs)
     mv = _move(actor_id, product, loc, lot, "ADJUSTMENT", change, each, reason=reason, journal_id=entry.id if entry else None)
+    if change > 0 and product.costing_method == "FIFO":
+        from modules.inventory import valuation
+        valuation.add_layer(product, mv.id, change, value)
     record_tenant_event(current_tenant(), "inventory.stock.adjusted", actor_user_id=actor_id, target_type="Product", target_id=product.id, metadata={"delta": str(change), "reason": reason[:200], "location": loc.code})
     events.emit("inventory.stock.adjusted", {"product_id": str(product.id), "location_id": str(loc.id), "delta": str(change)})
     return mv
