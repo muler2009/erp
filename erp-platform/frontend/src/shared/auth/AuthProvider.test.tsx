@@ -61,10 +61,11 @@ describe("AuthProvider", () => {
   it("signs in again when the session is lost", async () => {
     vi.spyOn(svc, "currentUser").mockResolvedValue({} as never);
     let lost: () => void = () => {};
-    vi.spyOn(svc, "onSessionLost").mockImplementation((h) => { lost = h; return () => {}; });
+    const register = vi.spyOn(svc, "onSessionLost").mockImplementation((h) => { lost = h; return () => {}; });
     const signIn = vi.spyOn(svc, "signIn").mockResolvedValue(undefined);
     render(<AuthProvider><Child /></AuthProvider>);
     await screen.findByText("authenticated");
+    await waitFor(() => expect(register).toHaveBeenCalled()); // the handler is registered in an effect after the render
     lost();
     expect(signIn).toHaveBeenCalled();
   });

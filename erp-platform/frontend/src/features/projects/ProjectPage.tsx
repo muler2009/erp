@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ProjectNav } from "./ProjectFinancePage";
 import { useParams } from "react-router";
 
 import { useCreateProjectTaskMutation, useGetProjectQuery, useListProjectTasksQuery, useSetProjectStatusMutation, useUpdateTaskProgressMutation } from "../../shared/api/endpoints";
@@ -107,6 +108,7 @@ export function ProjectPage() {
     <>
       <PageHeader title={`${p.code} ${p.name}`} description={`${p.start_on} to ${p.end_on} · ${pretty(p.billing_type)}${Number(p.contract_value) > 0 ? ` · ${formatMoney(p.contract_value)}` : ""}`}
         actions={<div className="flex gap-2">{NEXT[p.status]?.map((s) => <Button key={s} variant="secondary" onClick={() => setMoveTo(s)}>{`Mark ${pretty(s)}`}</Button>)}<Button onClick={() => setAdding(true)}>Add task</Button></div>} />
+      <ProjectNav id={id} current="" />
       <p className="mb-3"><Badge tone={statusTone(p.status)}>{pretty(p.status)}</Badge></p>
       {p.description && <p className="mb-4 text-sm">{p.description}</p>}
       <Card title="Tasks">

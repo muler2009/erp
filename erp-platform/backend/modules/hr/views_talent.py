@@ -22,7 +22,10 @@ def _req(r):
 
 
 def _cand(c):
-    return {"id": str(c.id), "requisition": str(c.requisition_id), "name": c.name, "email": c.email, "phone": c.phone, "source": c.source, "stage": c.stage, "reason": c.reason, "employee": _s(c.employee_id)}
+    # The latest offer and the interviews ride along so the pipeline screen can act on them (offer and interview ids have no other source).
+    offer = c.offers.order_by("-created_at").first()
+    return {"id": str(c.id), "requisition": str(c.requisition_id), "name": c.name, "email": c.email, "phone": c.phone, "source": c.source, "stage": c.stage, "reason": c.reason, "employee": _s(c.employee_id),
+            "offer": _offer(offer) if offer else None, "interviews": [_int(i) for i in c.interviews.select_related("candidate").order_by("scheduled_at")]}
 
 
 def _int(i):

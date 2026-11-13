@@ -388,7 +388,7 @@ def schedule(project_id):
     rows, critical = [], []
     for t in tasks:
         row = {"id": str(t.id), "wbs": t.wbs_code, "name": t.name, "parent": None if not t.parent_id else str(t.parent_id), "milestone": t.is_milestone, "status": t.status, "start": str(t.planned_start), "end": str(t.planned_end), "percent": str(t.percent_complete), "assignee": None if not t.assignee_id else str(t.assignee_id), "summary": t.id in parents,
-               "hours": str(t.planned_hours), "predecessors": [{"task": str(d.predecessor_id), "kind": d.kind, "lag_days": d.lag_days} for d in deps if d.successor_id == t.id]}
+               "hours": str(t.planned_hours), "predecessors": [{"id": str(d.id), "task": str(d.predecessor_id), "kind": d.kind, "lag_days": d.lag_days} for d in deps if d.successor_id == t.id]}
         if t.id in by_id:
             slack = late_finish[t.id] - t.planned_end.toordinal()
             row["slack_days"], row["critical"] = slack, slack == 0 and t.status != "DONE"

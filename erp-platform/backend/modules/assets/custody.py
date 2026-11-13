@@ -327,5 +327,5 @@ def transfer_history(asset_id=None):
     qs = m.AssetTransfer.objects.select_related("asset", "from_location", "to_location").order_by("-created_at")
     if asset_id:
         qs = qs.filter(asset_id=asset_id)
-    return [{"number": t.number, "asset": t.asset.number, "status": t.status, "reason": t.reason, "effective_date": str(t.effective_date), "from_location": t.from_location.code if t.from_location else None, "to_location": t.to_location.code if t.to_location else None,
+    return [{"id": str(t.id), "number": t.number, "asset": t.asset.number, "status": t.status, "reason": t.reason, "effective_date": str(t.effective_date), "from_location": t.from_location.code if t.from_location else None, "to_location": t.to_location.code if t.to_location else None,
              "from_department": None if not t.from_department_id else str(t.from_department_id), "to_department": None if not t.to_department_id else str(t.to_department_id), "condition_out": t.condition_out, "condition_in": t.condition_in} for t in qs[:500]]

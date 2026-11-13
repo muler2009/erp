@@ -186,3 +186,152 @@ No backend change. First of the slices that finish HR and payroll.
 - Tests: 252 frontend tests passing (10 new), tsc clean, build OK, 0 vulnerabilities. Backend last full run: 690 passed.
 
 Not done in this slice (later HR slices): bulk employee import, grades and position plans, org chart, separations list/resignation, pay components on an employee, salary history, edit of department/position selection is "change only if chosen" (use the Assignment tab for approved changes).
+
+## F24 — Payroll administration and compensation (2026-11-12)
+
+No backend change. Also corrects four mismatches in F23 found by reading the backend enums: employment types are Full time/Part time/Contractor/Intern; contract kinds Permanent/Fixed term/Casual; skill level is 1–5; assignment changes are Promotion/Transfer/Reporting line and must name something to change (department, position, manager or remove manager), which the form now requires. Dialog checks that throw plain errors are now shown as written.
+- **Pay setup** `/app/hr/pay-setup` (`hr.compensation.view`, edit with `hr.compensation.manage`): allowance/deduction components (create: code, kind, fixed or percent of basic, value, taxable) and income tax brackets (editable table; the browser checks start at 0, rising bounds, rate 0–100; read-only without manage).
+- **Compensation** `/app/hr/compensation`: tabs *Salary revisions* (request, approve/reject; `hr.compensation.view/manage`), *Variable pay* (add bonus/commission/arrears/adjustment/reimbursement for a month, approve/reject needs `hr.payroll.approve`; negative only for adjustments), *Loans* (any employee requests their own loan or advance; HR requests for others and approves/rejects/cancels; amount, 1–60 installments, first deduction month).
+- **Payroll run dialog**: Payroll register, Cost by department, Payment instructions (`hr.payroll.pay`; shows total, employees with no bank account, and downloads a CSV generated in the browser with spreadsheet-formula neutralising), and **Reverse run** with a required reason (posted or paid runs, `hr.payroll.pay`).
+- **Employee page, Employment tab**: salary history, assign a pay component (with optional end date and override value), and the employee's payslips (`hr.payroll.view`).
+- Tests: 262 frontend tests passing (10 new), tsc clean, build OK, 0 vulnerabilities. Backend last full run: 690 passed.
+
+Not done in this slice: editing or deactivating components, viewing an employee's assigned components (no read endpoint exists), loan schedule detail, bank account entry for employees, PDF payslips.
+
+## F25 — HR: attendance management, leave management, work time setup (2026-11-12)
+
+No backend change. All three pages need `hr.self`; each tab shows only what the user's permissions allow, and the server limits every list and report to the people the user may see.
+- **Attendance management** `/app/hr/attendance-admin`: *Corrections* (request for yourself, or for an employee with `hr.employee.manage`; clock times are sent as UTC instants; approve/reject with `hr.timesheet.approve`), *Overtime* (same pattern; hours above 0 and at most 24), *Exceptions* (late, early, missed punch, absent, with any correction or overtime request status) and *Report* (period and day/week/month grouping).
+- **Leave management** `/app/hr/leave-admin`: *Calendar* (who is away, holidays), *Report* (by employee, department or leave type, plus absence by month), *Leave types* (`hr.config.manage`: name, grant mode, annual days, carry-over, eligibility, notice, half days, employment types, active), *Allocations* (`hr.employee.manage`: set an employee's days for a year; with `hr.config.manage`, run accrual or year-end, which the server makes idempotent) and *Delegations* (`hr.leave.approve`: delegate approvals to a colleague for a period and revoke; the server has no list endpoint, so only delegations made in the current session are shown).
+- **Work time setup** `/app/hr/work-time`: *Schedules* (list, create with `hr.config.manage`, assign to an employee with `hr.employee.manage`) and *Overtime policy* (view; edit with `hr.config.manage`; multipliers at least 1, daily maximum 0–24).
+- Employee edit dialog now also takes bank account and tax ID (blank keeps the current value), which payment instructions need.
+- Tests: 273 frontend tests passing (11 new), tsc clean, build OK, 0 vulnerabilities. Backend last full run: 690 passed.
+
+Not done: punch import from devices (`hr/attendance/import`), per-employee daily attendance summary view, other employees' attendance list, holiday calendar maintenance (organisation module), delegations history.
+
+## F26 — HR recruitment
+
+**Implemented**
+- Job requisitions (`/app/hr/recruitment`): list, create (title, headcount 1–500, justification, optional department/position), submit, approve/reject (`hr.recruitment.approve`; reject needs a reason), close; candidates-by-stage funnel.
+- Candidate pipeline (`/app/hr/recruitment/:id`): add candidate, move Applied→Screening→Interview, reject/withdraw (reason required), schedule interview (interviewer picker + date/time sent with zone), scorecard, create offer (salary > 0, 3-letter currency, start date today or later; money as a decimal string), approve/accept/decline offer, hire (shows the new employee number).
+- My interviews (`/app/hr/my-interviews`): interviews awaiting feedback; feedback with score 1–5 and Hire/No-hire recommendation.
+- Backend: candidate payload now includes `offer` and `interviews` so the screen has the ids it needs (assertions added to `tests/test_hr_talent.py`).
+- Naming: frontend type/hook names use `JobRequisition` to avoid clashing with procurement requisitions.
+
+**Tested**: 11 new frontend tests (validators, permission-gated approval, reject reason, server refusal shown, offer past-date block, hire, feedback). Frontend total 284 passing; tsc clean; build OK; `npm audit` 0 vulnerabilities.
+
+**Not done**: not run in a real browser against real Keycloak/backend; no endpoint to list offers across requisitions; no list of a requisition's interviews outside the candidate payload.
+
+## F27 — HR talent
+
+**Implemented**
+- Performance (`/app/hr/performance`): cycles (create, activate, close — `hr.performance.manage`), goals (add with weight, update progress 0–100), reviews with self / manager / acknowledge actions by status.
+- Learning (`/app/hr/learning`): courses, training records, record training, mandatory-training compliance (missing/expired/expiring, managers only).
+- Employee relations (`/app/hr/cases`): case list and detail, open case, file a grievance (any employee), notes and close (managers; notes only returned to managers by the backend).
+- Policies (`/app/hr/policies`): list/read, create and edit drafts, publish, acknowledge, who has not acknowledged.
+- Reimbursements (`/app/hr/reimbursements`): submit claim (amount as decimal string, no future date), approve/reject (reason required to reject) with separation-of-duties refusals shown as returned.
+- Money is formatted with the shared bigint helper; all permission-aware controls are UX only.
+
+**Tested**: 11 new tests (validators, permission gating, refusals shown, local validation before calls, payload shapes). Frontend total 295 passing; tsc clean; build OK; `npm audit` 0 vulnerabilities.
+
+**Not done**: not run in a real browser against real Keycloak/backend; manager-review button is shown to everyone with `hr.self` (the backend decides who may rate); no goal-edit/delete; policy edit shows an empty form rather than pre-filled text.
+
+## F28 — HR administration: separations, organization, monitoring, analytics, imports
+
+**Implemented**
+- Separations (`/app/hr/separations`): HR list with status filter, accept / reject (note required), record settlement (amount as decimal string, ≥ 0); employee self-service resignation (future last day, reason) and withdraw.
+- Organization (`/app/hr/organization`): reporting-line tree, headcount plan (approved / filled / vacant / over plan), job grades list and create (`hr.config.manage`, salary range checked).
+- Monitoring (`/app/hr/monitoring`): probation, contracts, documents, qualifications, retirements for a 30–180 day look-ahead.
+- HR analytics (`/app/hr/analytics`): headcount, turnover, tenure, recruitment funnel, leave days, payroll cost (shown only when the server returns it).
+- Imports (`/app/hr/imports`): employee CSV — check first, import enabled only when every row is valid, row errors listed; attendance punches (`employee_no,timestamp` with zone, max 5,000), results incl. unknown employees. Sections follow `hr.employee.manage` / `hr.attendance.import`.
+
+**Tested**: 11 new tests. Frontend total 306 passing (clean run); tsc clean; build OK; `npm audit` 0 vulnerabilities. Note: running the full suite while a build runs in parallel caused two timing-related failures in unrelated tests; both pass alone and in a clean full run.
+
+**Not done**: not run in a real browser against real Keycloak/backend; a resigning employee can withdraw only in the same session (there is no endpoint returning their own resignation); position-plan editing (`PUT hr/positions/:id/plan`) has an endpoint hook but no screen; policy edit form is not pre-filled; punch-only importers have no nav entry unless they also hold `hr.employee.manage`; no worker-pay or other analytics kinds beyond the dashboard.
+
+## F29 — Projects: money side, registers and team
+
+**Implemented** (all under `/app/projects/projects/:id/…`, with a section nav on every project page)
+- Budget & costs (`/finance`): budget revisions (create with category lines, edit a draft, submit, approve/reject with `projects.budget.approve`, revision reason required), cost report by category with over-budget flags and earned-value indices (CPI/SPI/forecast), profitability and billing summary. Server refusals (e.g. only manager/finance may see costs; separation of duties) are shown as returned.
+- Expenses (`/expenses`): list, submit (non-labour categories, amount > 0, no future date), approve/reject (reason required).
+- Risks & issues (`/risks`): raise risks (probability/impact 1–5, score badge) and issues (severity), only legal status moves offered, note required to close a risk / resolve an issue.
+- Team (`/team`): members with role, rates, allocation; add (person picker, rates ≥ 0, allocation 0–100), remove (manager cannot be removed; server refusals shown).
+- Money is decimal strings / bigint-based formatting throughout.
+
+**Tested**: 13 new tests. Frontend total 318 passing; tsc clean; build OK; `npm audit` 0 vulnerabilities.
+
+**Not done**: not run in a real browser against real Keycloak/backend; Gantt chart, task dependencies, resource-load report, time report, project invoicing (POST billing) and expense receipt upload have no screens; team page shows "User <id>" for members it did not add this session (no user-name lookup by id); risk/issue owner/assignee editing not exposed; budget approve/reject buttons are permission-hidden but approval limits are decided by the server.
+
+## F30 — Projects: schedule, dependencies, time & billing, resource load
+
+**Implemented**
+- Schedule (`/app/projects/projects/:id/schedule`): Gantt bars on the project timeline (clamped to the span), critical path and slack, critical tasks flagged, link tasks (finish-to-start / start-to-start, lag), remove a link, move a task by N days with or without dependents; server refusals (circular link, dependency violated) shown as returned.
+- Time & billing (`/billing`): approved hours with cost for a chosen period, time-billing preview (`projects.billing.manage` only), create invoice (milestone / approved time / advance; amount as decimal string), invoices raised summary.
+- Resource load (`/app/projects/resource-load`): per-person allocation and planned-hours load for a period and weekly capacity, over-allocated/overloaded flags.
+- Backend: the Gantt payload's predecessor links now carry their `id` (needed to remove a dependency); assertion added to `tests/test_projects_wbs.py`.
+- Test fix: the AuthProvider "session lost" test raced the effect that registers the handler (failed ~1 in 3 runs); it now waits for the registration. 8/8 consecutive runs pass.
+
+**Tested**: 9 new frontend tests. Frontend total 327 passing (clean run); tsc clean; build OK; `npm audit` 0 vulnerabilities. Backend: all `projects` tests pass (29).
+
+**Not done**: not run in a real browser against real Keycloak/backend; Gantt is read-only (no drag to reschedule; use "Move"); no task editing of planned dates/hours outside the existing task dialogs; time and resource reports show "User <id>" instead of names (no name lookup by id); the full backend suite was not re-run this slice (change limited to one payload key).
+
+## F31 — Assets: register, asset record, setup
+
+**Implemented**
+- Register (`/app/assets/register`): searchable, status-filterable asset list (cursor paging), create asset (category, name, purchase cost as decimal string, acquisition date, maker/model/serial) with `assets.asset.manage`.
+- Asset record (`/app/assets/register/:id`): details, manual status moves limited to the ones the backend allows (Requested→Ordered/Received, Ordered→Received, Received→Available, Available→Retired; reason required to retire), edit with the record's `version` sent so concurrent edits are refused by the server, depreciation schedule (next 12 periods; the server's reason is shown when the asset is not capitalised), change history.
+- Setup (`/app/assets/setup`): asset categories (code, class, depreciation method straight-line / reducing balance / none, useful life, residual %, annual rate, capitalisation threshold, serial required) and locations; create dialogs gated by `assets.category.manage` / `assets.location.manage`.
+
+**Tested**: 8 new tests. Frontend total 335 passing; tsc clean; build OK; `npm audit` 0 vulnerabilities. No backend change.
+
+**Not done**: not run in a real browser against real Keycloak/backend. Rest of the assets module has no screens yet: acquisition & capitalisation approval, custody (assignments, transfers, handover form), depreciation runs & valuation/adjustments & reconciliation, maintenance (plans, work orders, breakdowns, meters), inspections / warranties / insurance, fleet (allocations, usage, vehicles), disposals & verification counts, planning (dashboard, replacement plan, capex budgets). Documents upload, barcode/QR label view and category editing/deactivation are also not exposed.
+
+## F32 — Assets: acquisition, capitalisation, custody, transfers
+
+**Implemented**
+- Acquisition card on the asset record: record acquisition (source, cost as decimal string), add acquisition costs (freight, installation, duty, …), accept delivery, record commissioning (passed/failed), request capitalisation; totals and readiness shown. Actions need `assets.acquisition.manage`.
+- Capitalisation requests (`/app/assets/capitalizations`): status filter, shows depreciable base and flags below-threshold requests as expensed; approve / reject (reason required) with `assets.capitalization.approve`; separation-of-duties refusals shown as returned.
+- Custody (`/app/assets/custody`): assignments (new assignment for employee / department / project / location, permanent or temporary with return date; approve, reject, hand over with condition, acknowledge receipt, record return, cancel — each shown only in the status where it is legal and with its permission), transfers (new transfer with destination location/department; approve, reject, dispatch, receive with condition, cancel), and custody exceptions (overdue returns, unacknowledged handovers).
+- Backend: the transfer history rows now carry their `id` (needed to act on a transfer); assertion added to `tests/test_assets_custody.py` (6 passed).
+
+**Tested**: 10 new frontend tests. Frontend total 345 passing; tsc clean; build OK; `npm audit` 0 vulnerabilities.
+
+**Not done**: not run in a real browser against real Keycloak/backend. Asset pickers list the first page of AVAILABLE assets only (no search); transfers cannot name a new custodian from the UI; handover form (print/HTML) and acquisition links to PO / goods receipt / invoice are not exposed; still no screens for depreciation runs / valuation / adjustments / reconciliation, maintenance, inspections / warranties / insurance, fleet, disposals / verification counts, planning (dashboard, replacement plan, capex budgets).
+
+## F33 — Assets: depreciation, valuation and value adjustments
+
+**Implemented**
+- `/app/assets/depreciation`: monthly runs by year (run, reverse with reason), register-vs-ledger reconciliation with a visible "Does not reconcile" state, valuation report with as-of and category filters and totals, value-adjustment list with status filter, approve, and reject (reason required).
+- Asset page: "Adjust value" (improvement, revaluation, impairment) and "Change depreciation policy" dialogs, gated by `assets.valuation.manage`.
+- Backend: `depreciation_report` rows now carry the run `id` (assertion added).
+- Sequence, separation-of-duties and below-residual refusals come from the server and are shown as returned.
+
+**Tested**: 7 backend depreciation tests; 352 frontend tests (7 new in `depreciation.test.tsx`), tsc clean, build OK.
+
+**Not done**: real-browser run against Keycloak; the maintenance, inspections/insurance, fleet, disposals/counts and planning parts of assets; the adjustment list shows asset numbers, not names.
+
+## F34 — Assets: maintenance
+
+**Implemented** (`/app/assets/maintenance`, four tabs)
+- Work orders: status filter, create, approve / reject (reason), assign (technician or service provider), start, add labour, add spare part (issued from inventory stock), add external cost, complete, verify (pass or fail), cancel. Actions show only for the matching state and permission; every refusal (for example separation of duties) is shown as the server returns it.
+- Breakdowns: report, diagnose, open repair, close, status filter.
+- Plans and meters: plan list, new time- or usage-based plan, record a meter reading.
+- Reports: out-of-service assets, coming-due schedule (7–90 days), verified cost by asset / category / kind, breakdown analysis (MTTR, MTBF, recurring failures).
+- No backend change was needed.
+
+**Tested**: 361 frontend tests (9 new in `maintenance.test.tsx`), tsc clean, build OK, 0 vulnerabilities.
+
+**Not done**: real-browser run against Keycloak; plan edit / deactivate (no backend endpoint); technician and provider show as ids on a work order (no name lookup); inspections, warranties, insurance, fleet, disposals, counts and planning screens.
+
+## F35 — Assets: inspections, warranties and insurance
+
+**Implemented**
+- `/app/assets/inspections`: scheduled inspections (schedule, complete against the checklist, cancel), findings (raise a repair, resolve), checklist templates, condition-by-category report with overdue inspections. Completing checks pass/fail answers, readings, the condition and the "failed item needs a finding" rule before sending.
+- `/app/assets/coverage`: insurance policies (create, cover or remove an asset, renew, file a claim with a policy-period check), a claims list for both warranty and insurance claims (accept, reject, settle with amount recovered), and a watch list of uninsured assets and expiring warranties/policies.
+- Asset page: warranty card (in-force warranty, history, add a warranty, file a warranty claim).
+- Backend: new `GET /api/v1/assets/claims` (both claim kinds, optional status) because claims could only be decided right after filing; test added (403 for a user without `assets.view`).
+- Fixed an existing HR test that raced its own option loading.
+
+**Tested**: backend inspection/warranty and maintenance tests pass; 369 frontend tests (8 new in `coverage.test.tsx`), tsc clean, build OK, 0 vulnerabilities.
+
+**Not done**: uploading inspection evidence files (multipart; the backend supports it); real-browser run against Keycloak; warranty claim linked to a breakdown; fleet, disposals and counts, planning screens for assets.

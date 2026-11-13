@@ -318,6 +318,9 @@ def test_talent_http_permissions(api_env):
     assert api["hrm"].post(f"/api/v1/hr/recruitment/requisitions/{rid}/nonsense").status_code == 400
     rc = api["hro"].post(f"/api/v1/hr/recruitment/requisitions/{rid}/candidates", {"name": "Zed Z", "email": "z@x.com"})
     assert rc.status_code == 201, rc.json()
+    assert rc.json()["offer"] is None and rc.json()["interviews"] == []
+    listed = api["hro"].get(f"/api/v1/hr/recruitment/requisitions/{rid}/candidates").json()["results"]
+    assert listed[0]["offer"] is None and listed[0]["interviews"] == []
     assert api["e1"].get("/api/v1/hr/recruitment/interviews/mine").status_code == 200
     assert api["e1"].get("/api/v1/hr/learning/courses").status_code == 200
     assert api["e1"].post("/api/v1/hr/learning/courses", {"code": "X", "name": "x"}).status_code == 403

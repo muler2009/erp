@@ -173,6 +173,8 @@ def test_shift_cascades_and_critical_path(f):
     assert g["critical_path"] == ["1", "2", "3"]
     by = {r["wbs"]: r for r in g["tasks"]}
     assert by["4"]["slack_days"] == 12 and by["4"]["critical"] is False
+    link = by["2"]["predecessors"][0]
+    assert link["task"] == str(a.id) and link["id"]  # the link id lets a screen remove the dependency
     moved = tk.shift_task(uid(f), a.id, 3)
     assert {t.wbs_code for t in moved} == {"1", "2", "3"}
     c.refresh_from_db()

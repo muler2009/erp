@@ -138,7 +138,7 @@ describe("EmployeePage", () => {
   it("assignment tab: HR requests a change; history tab lists events", async () => {
     let body: any = null;
     base();
-    server.use(http.get("*/api/v1/hr/employees/e1/assignment-changes", () => HttpResponse.json([])),
+    server.use(http.get("*/api/v1/hr/employees", () => HttpResponse.json({ results: [] })), http.get("*/api/v1/hr/employees/e1/assignment-changes", () => HttpResponse.json([])),
       http.post("*/api/v1/hr/employees/e1/assignment-changes", async ({ request }) => { body = await request.json(); return HttpResponse.json({}, { status: 201 }); }),
       http.get("*/api/v1/hr/employees/e1/history", () => HttpResponse.json([{ kind: "HIRED", effective_date: "2025-01-01", details: { by: "HR" }, actor_id: null, recorded_at: "2025-01-01T00:00:00Z" }])));
     view(HR);
@@ -150,7 +150,11 @@ describe("EmployeePage", () => {
     fireEvent.change(within(dlg).getByLabelText("Effective date"), { target: { value: "2027-01-01" } });
     await user.type(within(dlg).getByLabelText("Reason"), "Excellent year");
     await user.click(within(dlg).getByRole("button", { name: "Submit request" }));
-    await waitFor(() => expect(body).toEqual({ kind: "PROMOTION", effective_date: "2027-01-01", reason: "Excellent year" }));
+    expect(await within(dlg).findByRole("alert")).toHaveTextContent(/at least one thing/);
+    await within(dlg).findByRole("option", { name: "Ops" });
+    await user.selectOptions(within(dlg).getByLabelText("New department"), "d1");
+    await user.click(within(dlg).getByRole("button", { name: "Submit request" }));
+    await waitFor(() => expect(body).toEqual({ kind: "PROMOTION", effective_date: "2027-01-01", reason: "Excellent year", department: "d1" }));
     await user.click(screen.getByRole("tab", { name: "History" }));
     expect(await screen.findByText(/Hired/)).toBeInTheDocument();
   });

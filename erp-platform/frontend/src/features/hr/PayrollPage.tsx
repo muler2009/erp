@@ -1,11 +1,12 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { useState } from "react";
 
-import { useCreatePayrollRunMutation, useGetPayrollRunQuery, useListPayrollRunsQuery, usePayrollActionMutation } from "../../shared/api/endpoints";
+import { useCreatePayrollRunMutation, useGetCostAllocationQuery, useGetPaymentInstructionsQuery, useGetPayrollRegisterQuery, useReversePayrollMutation, useGetPayrollRunQuery, useListPayrollRunsQuery, usePayrollActionMutation } from "../../shared/api/endpoints";
 import { errorMessage } from "../../shared/api/errors";
 import type { PayrollRun } from "../../shared/api/types";
 import { formatMoney } from "../../shared/lib/money";
 import { useAccess } from "../../shared/permissions/usePermissions";
+import { ActionDialog } from "./ActionDialog";
 import { DataTable } from "../../shared/ui/DataTable";
 import { Badge, Button, FormField, Modal, PageHeader, Spinner, inputClass } from "../../shared/ui/primitives";
 
@@ -42,12 +43,54 @@ function NewRunDialog({ open, onClose }: { open: boolean; onClose: () => void })
   );
 }
 
+/** Escapes a value for CSV and neutralises spreadsheet formulas (= + - @), as the server's export does. */
+export function csvCell(v: string): string {
+  const safe = /^[=+\-@]/.test(v) ? `'${v}` : v;
+  return /[",\n]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
+}
+export function toCsv(head: string[], rows: string[][]): string { return [head, ...rows].map((r) => r.map(csvCell).join(",")).join("\n"); }
+function download(name: string, text: string) {
+  const url = URL.createObjectURL(new Blob([text], { type: "text/csv" }));
+  const a = document.createElement("a"); a.href = url; a.download = name; a.click(); URL.revokeObjectURL(url);
+}
+
+function RunReports({ id, status }: { id: string; status: string }) {
+  const { can } = useAccess();
+  const [which, setWhich] = useState<"register" | "cost" | "pay" | null>(null);
+  const register = useGetPayrollRegisterQuery(id, { skip: which !== "register" });
+  const cost = useGetCostAllocationQuery(id, { skip: which !== "cost" });
+  const pay = useGetPaymentInstructionsQuery(id, { skip: which !== "pay" });
+  return (
+    <div className="mt-3 border-t border-slate-200 pt-3">
+      <div className="flex flex-wrap gap-2">
+        <Button variant="secondary" onClick={() => setWhich("register")}>Payroll register</Button>
+        <Button variant="secondary" onClick={() => setWhich("cost")}>Cost by department</Button>
+        {can("hr.payroll.pay") && ["APPROVED", "POSTED", "PAID"].includes(status) && <Button variant="secondary" onClick={() => setWhich("pay")}>Payment instructions</Button>}
+      </div>
+      {which === "register" && (register.isFetching ? <Spinner /> : register.data && (
+        <div className="mt-2 max-h-48 overflow-auto"><table className="w-full text-xs"><thead><tr><th className="text-left">No.</th><th className="text-left">Name</th><th className="text-left">Dept</th><th className="text-right">Gross</th><th className="text-right">Tax</th><th className="text-right">Pension</th><th className="text-right">Net</th></tr></thead>
+          <tbody>{register.data.rows.map((r) => <tr key={r.employee_no} className="border-t border-slate-100"><td>{r.employee_no}</td><td>{r.name}</td><td>{r.department ?? "—"}</td><td className="text-right">{formatMoney(r.gross)}</td><td className="text-right">{formatMoney(r.income_tax)}</td><td className="text-right">{formatMoney(r.pension_employee)}</td><td className="text-right">{formatMoney(r.net)}</td></tr>)}</tbody></table></div>
+      ))}
+      {which === "cost" && (cost.isFetching ? <Spinner /> : cost.data && <ul className="mt-2 text-sm">{cost.data.map((c) => <li key={c.department} className="flex justify-between"><span>{c.department}</span><span>{formatMoney(c.employer_cost)}</span></li>)}</ul>)}
+      {which === "pay" && (pay.isFetching ? <Spinner /> : pay.error ? <p role="alert" className="mt-2 text-sm text-red-700">{errorMessage(pay.error)}</p> : pay.data && (
+        <div className="mt-2 text-sm">
+          <p>Total to transfer: <strong>{formatMoney(pay.data.total)}</strong> to {pay.data.payments.length} accounts.</p>
+          {pay.data.missing_bank_account.length > 0 && <p role="alert" className="text-amber-700">No bank account on file for: {pay.data.missing_bank_account.join(", ")}.</p>}
+          <Button className="mt-2" variant="secondary" onClick={() => download(`payment-instructions-${pay.data!.number}.csv`, toCsv(["employee_no", "name", "bank_account", "amount", "reference"], pay.data!.payments.map((p) => [p.employee_no, p.name, p.bank_account, p.amount, p.reference])))}>Download CSV</Button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function RunDetail({ id, onClose }: { id: string | null; onClose: () => void }) {
   const { data, isFetching, error } = useGetPayrollRunQuery(id ?? "", { skip: !id });
   const [act, state] = usePayrollActionMutation();
   const [note, setNote] = useState("");
   const [payDate, setPayDate] = useState("");
   const [err, setErr] = useState<string | null>(null);
+  const [reversing, setReversing] = useState(false);
+  const [reverse] = useReversePayrollMutation();
   const { can } = useAccess();
   const run = async (action: "recalculate" | "submit" | "cancel" | "approve" | "reject" | "post" | "pay") => {
     if (action === "reject" && !note.trim()) { setErr("A note is required to send a run back."); return; }
@@ -72,8 +115,10 @@ function RunDetail({ id, onClose }: { id: string | null; onClose: () => void }) 
           {data.status === "PENDING_APPROVAL" && data.workflow_instance_id && <p className="mt-3 text-sm text-slate-600">This run is governed by an approval workflow; decide it in the approval inbox.</p>}
           {data.status === "PENDING_APPROVAL" && !data.workflow_instance_id && approve && <div className="mt-3"><FormField label="Note (required to send back)" htmlFor="pr-note"><input id="pr-note" maxLength={300} className={inputClass} value={note} onChange={(e) => setNote(e.target.value)} /></FormField></div>}
           {data.status === "POSTED" && pay && <div className="mt-3"><FormField label="Payment date (optional)" htmlFor="pr-pay"><input id="pr-pay" type="date" className={inputClass} value={payDate} onChange={(e) => setPayDate(e.target.value)} /></FormField></div>}
+          {data.status !== "DRAFT" && data.status !== "CANCELLED" && <RunReports id={data.id} status={data.status} />}
           {err && <p role="alert" className="mt-3 text-sm text-red-700">{err}</p>}
           <div className="mt-4 flex flex-wrap justify-end gap-2">
+            {["POSTED", "PAID"].includes(data.status) && pay && <Button variant="danger" onClick={() => setReversing(true)}>Reverse run</Button>}
             {data.status === "DRAFT" && process && <Button variant="secondary" loading={state.isLoading} onClick={() => void run("recalculate")}>Recalculate</Button>}
             {data.status === "DRAFT" && process && <Button loading={state.isLoading} onClick={() => void run("submit")}>Submit for approval</Button>}
             {data.status === "PENDING_APPROVAL" && !data.workflow_instance_id && approve && <Button loading={state.isLoading} onClick={() => void run("approve")}>Approve</Button>}
@@ -85,6 +130,8 @@ function RunDetail({ id, onClose }: { id: string | null; onClose: () => void }) 
           </div>
         </>
       )}
+      <ActionDialog title="Reverse payroll run" open={reversing} onClose={() => setReversing(false)} cta="Reverse run" fields={[{ name: "reason", label: "Reason (required)", required: true }]}
+        submit={(v) => reverse({ id: id!, reason: (v.reason ?? "").trim() }).unwrap()} />
     </Modal>
   );
 }

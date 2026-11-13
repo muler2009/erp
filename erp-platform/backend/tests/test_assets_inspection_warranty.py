@@ -149,3 +149,9 @@ def test_http_permissions_evidence_and_flow(api_env, acme):
     assert api["am"].get("/api/v1/assets/reports/coverage/uninsured").status_code == 200
     assert api["am"].get("/api/v1/assets/reports/condition").status_code == 200
     assert api["am"].post(f"/api/v1/assets/claims/bogus/{iid}/accept").status_code == 404
+    ic = api["am"].post(f"/api/v1/assets/insurance-policies/{pol.json()['id']}/claims", {"asset": str(a.id), "incident_date": "2026-06-01", "description": "Water damage", "amount_claimed": "100"})
+    assert ic.status_code == 201
+    listed = api["auditor"].get("/api/v1/assets/claims").json()["results"]  # the claim can be found again, not only right after filing
+    assert [(c["kind"], c["id"], c["status"]) for c in listed] == [("insurance", ic.json()["id"], "FILED")] and listed[0]["asset"] == a.number
+    assert api["auditor"].get("/api/v1/assets/claims?status=SETTLED").json()["results"] == []
+    assert api["emp"].get("/api/v1/assets/claims").status_code == 403

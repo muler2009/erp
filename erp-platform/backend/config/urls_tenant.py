@@ -541,6 +541,7 @@ urlpatterns = [
     path("api/v1/assets/reports/condition", avi.ConditionReport.as_view()),
     path("api/v1/assets/assets/<uuid:pk>/warranties", avi.Warranties.as_view()),
     path("api/v1/assets/warranties/<uuid:pk>/claims", avi.WarrantyClaims.as_view()),
+    path("api/v1/assets/claims", avi.Claims.as_view()),
     path("api/v1/assets/claims/<str:kind>/<uuid:pk>/<str:action>", avi.ClaimDecision.as_view()),
     path("api/v1/assets/insurance-policies", avi.Policies.as_view()),
     path("api/v1/assets/insurance-policies/<uuid:pk>/<str:action>", avi.PolicyAction.as_view()),

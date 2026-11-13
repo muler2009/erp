@@ -187,3 +187,21 @@ class CoverageReports(APIView):
         if report == "expiring":
             return Response(wt.expiring(int(request.query_params.get("days", 30))))
         raise DomainError("Unknown report.", code="not_found", status_code=404)
+
+
+class Claims(APIView):
+    """Both kinds of claim in one list, so a screen can decide them without having just filed them."""
+
+    def get_permissions(self):
+        return perm("assets.view")
+
+    def get(self, request):
+        status = request.query_params.get("status")
+        rows = []
+        w = m.WarrantyClaim.objects.select_related("warranty", "warranty__asset")
+        i = m.InsuranceClaim.objects.select_related("policy", "asset")
+        if status:
+            w, i = w.filter(status=status), i.filter(status=status)
+        rows += [_claim(c, kind="warranty", asset=c.warranty.asset.number, source=c.warranty.provider_name, date=str(c.claim_date), created_at=c.created_at.isoformat()) for c in w]
+        rows += [_claim(c, kind="insurance", asset=c.asset.number, source=c.policy.policy_number, date=str(c.incident_date), created_at=c.created_at.isoformat()) for c in i]
+        return Response({"results": sorted(rows, key=lambda r: r["created_at"], reverse=True)})

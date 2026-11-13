@@ -28,6 +28,7 @@ def test_straight_line_runs_post_to_finance_and_reconcile(f):
     run = dp.run_depreciation(f["people"]["ctrl"].id, 2026, 3)
     a.refresh_from_db()
     assert run.total_amount == D("30") and a.accumulated_depreciation == D("30") and dp.nbv(a) == D("1170")
+    assert dp.depreciation_report(2026)[0]["id"] == str(run.id)  # the id lets a screen reverse the run
     assert gl("5500") == D("30") and abs(gl("1590")) == D("30")
     with pytest.raises(DomainError) as e:
         dp.run_depreciation(f["people"]["ctrl"].id, 2026, 3)

@@ -5,7 +5,7 @@ import { errorMessage } from "../../shared/api/errors";
 import type { Employee } from "../../shared/api/types";
 import { Button, FormField, Modal, inputClass } from "../../shared/ui/primitives";
 
-export const EMPLOYMENT_TYPES = ["FULL_TIME", "PART_TIME", "CONTRACT", "INTERN"];
+export const EMPLOYMENT_TYPES = ["FULL_TIME", "PART_TIME", "CONTRACTOR", "INTERN"];
 export const pretty = (s: string) => (s.charAt(0) + s.slice(1).toLowerCase()).replace(/_/g, " ");
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -69,6 +69,8 @@ export function NewEmployeeDialog({ open, onClose, onCreated }: { open: boolean;
 export function EditEmployeeDialog({ employee, open, onClose }: { employee: Employee; open: boolean; onClose: () => void }) {
   const [update, state] = useUpdateEmployeeMutation();
   const [f, setF] = useState<EmployeeForm>({ ...blank, first: employee.first_name, last: employee.last_name, email: employee.email, phone: employee.phone ?? "", hire: employee.hire_date });
+  const [bank, setBank] = useState("");
+  const [taxId, setTaxId] = useState("");
   const [err, setErr] = useState<string | null>(null);
   const set = (p: Partial<EmployeeForm>) => setF((x) => ({ ...x, ...p }));
   const go = async () => {
@@ -79,12 +81,18 @@ export function EditEmployeeDialog({ employee, open, onClose }: { employee: Empl
     if (f.department) body.department = f.department;
     if (f.position) body.position = f.position;
     if (f.dob) body.date_of_birth = f.dob;
+    if (bank.trim()) body.bank_account = bank.trim();
+    if (taxId.trim()) body.tax_id = taxId.trim();
     try { await update({ id: employee.id, body }).unwrap(); onClose(); } catch (e) { setErr(errorMessage(e)); }
   };
   return (
     <Modal title="Edit employee" open={open} onClose={onClose}>
       <p className="mb-3 text-sm text-slate-600">Choose a department or position only to change it; leaving them as None keeps the current ones. Use the Assignment tab for approved transfers and promotions.</p>
       <Fields f={f} set={set} />
+      <div className="grid grid-cols-2 gap-3">
+        <FormField label="Bank account (leave blank to keep)" htmlFor="em-bank"><input id="em-bank" autoComplete="off" className={inputClass} value={bank} onChange={(e) => setBank(e.target.value)} /></FormField>
+        <FormField label="Tax ID (leave blank to keep)" htmlFor="em-tax"><input id="em-tax" autoComplete="off" className={inputClass} value={taxId} onChange={(e) => setTaxId(e.target.value)} /></FormField>
+      </div>
       {err && <p role="alert" className="mb-3 text-sm text-red-700">{err}</p>}
       <div className="flex justify-end gap-2"><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={state.isLoading} onClick={() => void go()}>Save changes</Button></div>
     </Modal>

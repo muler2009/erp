@@ -296,7 +296,7 @@ def valuation_report(as_of=None, category_id=None):
 
 
 def depreciation_report(year):
-    return [{"period": f"{r.year}-{r.month:02d}", "status": r.status, "total": str(r.total_amount), "assets": r.asset_count} for r in m.DepreciationRun.objects.filter(year=year).order_by("month")]
+    return [{"id": str(r.id), "period": f"{r.year}-{r.month:02d}", "status": r.status, "total": str(r.total_amount), "assets": r.asset_count} for r in m.DepreciationRun.objects.filter(year=year).order_by("month")]
 
 
 def reconcile():

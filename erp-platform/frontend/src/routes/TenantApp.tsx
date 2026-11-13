@@ -1,3 +1,31 @@
+import { InspectionsPage } from "../features/assets/InspectionsPage";
+import { CoveragePage } from "../features/assets/CoveragePage";
+import { MaintenancePage } from "../features/assets/MaintenancePage";
+import { DepreciationPage } from "../features/assets/DepreciationPage";
+import { AssetCustodyPage } from "../features/assets/AssetCustodyPage";
+import { CapitalizationsPage } from "../features/assets/CapitalizationsPage";
+import { AssetsPage } from "../features/assets/AssetsPage";
+import { AssetPage } from "../features/assets/AssetPage";
+import { AssetSetupPage } from "../features/assets/AssetSetupPage";
+import { ProjectSchedulePage } from "../features/projects/ProjectSchedulePage";
+import { ProjectBillingPage } from "../features/projects/ProjectBillingPage";
+import { ResourceLoadPage } from "../features/projects/ResourceLoadPage";
+import { ProjectFinancePage } from "../features/projects/ProjectFinancePage";
+import { ProjectExpensesPage } from "../features/projects/ProjectExpensesPage";
+import { ProjectRegisterPage } from "../features/projects/ProjectRegisterPage";
+import { ProjectTeamPage } from "../features/projects/ProjectTeamPage";
+import { SeparationsPage } from "../features/hr/SeparationsPage";
+import { OrgPage } from "../features/hr/OrgPage";
+import { MonitoringPage } from "../features/hr/MonitoringPage";
+import { HrAnalyticsPage } from "../features/hr/HrAnalyticsPage";
+import { ImportPage } from "../features/hr/ImportPage";
+import { PerformancePage } from "../features/hr/PerformancePage";
+import { LearningPage } from "../features/hr/LearningPage";
+import { CasesPage } from "../features/hr/CasesPage";
+import { PoliciesPage } from "../features/hr/PoliciesPage";
+import { ReimbursementsPage } from "../features/hr/ReimbursementsPage";
+import { RecruitmentPage } from "../features/hr/RecruitmentPage";
+import { CandidatesPage, MyInterviewsPage } from "../features/hr/CandidatesPage";
 import { Navigate, Route, Routes } from "react-router";
 
 import { AppLayout } from "../layouts/AppLayout";
@@ -23,6 +51,11 @@ import { ProductsPage } from "../features/inventory/ProductsPage";
 import { MyTasksPage } from "../features/projects/MyTasksPage";
 import { ProjectPage } from "../features/projects/ProjectPage";
 import { ProjectsPage } from "../features/projects/ProjectsPage";
+import { AttendanceAdminPage } from "../features/hr/AttendanceAdminPage";
+import { LeaveAdminPage } from "../features/hr/LeaveAdminPage";
+import { WorkTimePage } from "../features/hr/WorkTimePage";
+import { CompensationPage } from "../features/hr/CompensationPage";
+import { PaySetupPage } from "../features/hr/PaySetupPage";
 import { PayrollPage } from "../features/hr/PayrollPage";
 import { PayslipsPage } from "../features/hr/PayslipsPage";
 import { AttendancePage } from "../features/hr/AttendancePage";
@@ -76,12 +109,46 @@ export function TenantApp() {
           <Route path="/app/inventory/warehouses" element={<WarehousesPage />} />
           <Route path="/app/inventory/stock" element={<StockPage />} />
           <Route path="/app/hr/employees" element={<EmployeesPage />} />
+          <Route path="/app/hr/recruitment" element={<RecruitmentPage />} />
+          <Route path="/app/hr/recruitment/:id" element={<CandidatesPage />} />
+          <Route path="/app/hr/my-interviews" element={<MyInterviewsPage />} />
+          <Route path="/app/hr/performance" element={<PerformancePage />} />
+          <Route path="/app/hr/separations" element={<SeparationsPage />} />
+          <Route path="/app/hr/organization" element={<OrgPage />} />
+          <Route path="/app/hr/monitoring" element={<MonitoringPage />} />
+          <Route path="/app/hr/analytics" element={<HrAnalyticsPage />} />
+          <Route path="/app/hr/imports" element={<ImportPage />} />
+          <Route path="/app/hr/learning" element={<LearningPage />} />
+          <Route path="/app/hr/cases" element={<CasesPage />} />
+          <Route path="/app/hr/policies" element={<PoliciesPage />} />
+          <Route path="/app/hr/reimbursements" element={<ReimbursementsPage />} />
           <Route path="/app/hr/employees/:id" element={<EmployeePage />} />
           <Route path="/app/hr/attendance" element={<AttendancePage />} />
           <Route path="/app/hr/timesheets" element={<TimesheetsPage />} />
           <Route path="/app/projects/projects" element={<ProjectsPage />} />
           <Route path="/app/projects/projects/:id" element={<ProjectPage />} />
+          <Route path="/app/projects/projects/:id/finance" element={<ProjectFinancePage />} />
+          <Route path="/app/projects/projects/:id/expenses" element={<ProjectExpensesPage />} />
+          <Route path="/app/projects/projects/:id/risks" element={<ProjectRegisterPage />} />
+          <Route path="/app/projects/projects/:id/team" element={<ProjectTeamPage />} />
+          <Route path="/app/projects/projects/:id/schedule" element={<ProjectSchedulePage />} />
+          <Route path="/app/projects/projects/:id/billing" element={<ProjectBillingPage />} />
+          <Route path="/app/projects/resource-load" element={<ResourceLoadPage />} />
+          <Route path="/app/assets/register" element={<AssetsPage />} />
+          <Route path="/app/assets/register/:id" element={<AssetPage />} />
+          <Route path="/app/assets/setup" element={<AssetSetupPage />} />
+          <Route path="/app/assets/custody" element={<AssetCustodyPage />} />
+          <Route path="/app/assets/depreciation" element={<DepreciationPage />} />
+          <Route path="/app/assets/maintenance" element={<MaintenancePage />} />
+          <Route path="/app/assets/inspections" element={<InspectionsPage />} />
+          <Route path="/app/assets/coverage" element={<CoveragePage />} />
+          <Route path="/app/assets/capitalizations" element={<CapitalizationsPage />} />
           <Route path="/app/projects/my-tasks" element={<MyTasksPage />} />
+          <Route path="/app/hr/attendance-admin" element={<AttendanceAdminPage />} />
+          <Route path="/app/hr/leave-admin" element={<LeaveAdminPage />} />
+          <Route path="/app/hr/work-time" element={<WorkTimePage />} />
+          <Route path="/app/hr/compensation" element={<CompensationPage />} />
+          <Route path="/app/hr/pay-setup" element={<PaySetupPage />} />
           <Route path="/app/hr/payroll" element={<PayrollPage />} />
           <Route path="/app/hr/payslips" element={<PayslipsPage />} />
           <Route path="/app/hr/leave" element={<LeavePage />} />

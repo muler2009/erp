@@ -122,6 +122,7 @@ def test_transfer_flow_updates_location_only_on_acknowledged_receipt(f):
     a.refresh_from_db()
     assert a.status == "AVAILABLE" and a.location_id == f["loc2"].id and a.custodian_id == me.id and a.condition == "FAIR"
     assert cu.transfer_history(a.id)[0]["status"] == "COMPLETED"
+    assert cu.transfer_history(a.id)[0]["id"]  # the id lets a screen act on the transfer
     assert [h["detail"].get("field") for h in svc.history(a.id) if h["event"] == "OWNERSHIP_CHANGED"] == ["location_id", "custodian_id"]
 
 
