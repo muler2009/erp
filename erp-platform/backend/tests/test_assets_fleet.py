@@ -171,3 +171,10 @@ def test_http_permissions(api_env, acme):
     assert ok.status_code == 201
     assert api["am"].post(f"/api/v1/assets/assets/{a.id}/usage", {"hours": "30"}).status_code == 400
     assert api["am"].get("/api/v1/assets/reports/usage/utilization").status_code == 400
+    inc = api["am"].post(f"/api/v1/assets/vehicles/{vid}/incidents", {"description": "Scraped a gate", "severity": "MINOR", "damage_cost": "40"})
+    assert inc.status_code == 201
+    listed = api["auditor"].get(f"/api/v1/assets/vehicles/{vid}/info/incidents").json()["results"]  # incidents can be found again to close them
+    assert [(i["id"], i["status"], i["damage_cost"]) for i in listed] == [(inc.json()["id"], "OPEN", "40.0000")]
+    assert api["emp"].get(f"/api/v1/assets/vehicles/{vid}/info/incidents").status_code == 403
+    assert api["am"].post(f"/api/v1/assets/incidents/{inc.json()['id']}/close").status_code == 200
+    assert api["auditor"].get(f"/api/v1/assets/vehicles/{vid}/info/incidents").json()["results"][0]["status"] == "CLOSED"

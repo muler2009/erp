@@ -117,6 +117,9 @@ class VehicleInfo(APIView):
     def get(self, request, pk, what):
         if what == "fuel-efficiency":
             return Response(fl.fuel_efficiency(pk))
+        if what == "incidents":
+            rows = m.VehicleIncident.objects.filter(vehicle_id=pk).order_by("-occurred_on", "-created_at")
+            return Response({"results": [{"id": str(i.id), "occurred_on": str(i.occurred_on), "description": i.description, "severity": i.severity, "damage_cost": str(i.damage_cost), "status": i.status, "driver_id": _s(i.driver_id)} for i in rows]})
         raise DomainError("Unknown resource.", code="not_found", status_code=404)
 
 

@@ -335,3 +335,64 @@ Not done: punch import from devices (`hr/attendance/import`), per-employee daily
 **Tested**: backend inspection/warranty and maintenance tests pass; 369 frontend tests (8 new in `coverage.test.tsx`), tsc clean, build OK, 0 vulnerabilities.
 
 **Not done**: uploading inspection evidence files (multipart; the backend supports it); real-browser run against Keycloak; warranty claim linked to a breakdown; fleet, disposals and counts, planning screens for assets.
+
+## F36 — Assets: disposals, verification counts and planning
+
+**Implemented**
+- `/app/assets/disposals`: request (sale needs a buyer), approve / reject (reason), execute (proceeds only for a sale), cancel, completed-disposal certificate, disposal report by period with totals.
+- `/app/assets/counts`: start a count (by location and category), scan assets by code with found-at location and condition, finish scanning, results with accuracy, resolve each discrepancy with only the choices the server allows for that kind, close (disabled until all resolved), cancel.
+- `/app/assets/planning`: dashboard (value, ledger match, attention tiles, assets by status), replacement candidates with one-click planning, replacement plan (approve / reject), capital budgets (propose, approve / reject) and budget-against-spend report with an over-budget flag.
+- Separation-of-duties and other refusals are shown as the server returns them. No backend change was needed.
+
+**Tested**: 379 frontend tests (10 new in `lifecycle.test.tsx`), tsc clean, build OK, 0 vulnerabilities.
+
+**Not done**: real-browser run against Keycloak; camera/barcode-reader scanning (typed or scanner-keyboard entry only); the count list does not show per-line expected assets, only discrepancies; fleet screens (usage, vehicle expiries, utilization reports); a disposal's buyer reference field.
+
+## F37 — Assets: fleet, allocation and utilization (assets module frontend complete)
+
+**Implemented**
+- `/app/assets/fleet`: vehicles (register, assign driver with a licence expiry, renew registration, log fuel, report incident), per-vehicle history (fuel efficiency in km/L, incidents with close), expiries of registration, licence and insurance, running-cost report with cost per km.
+- `/app/assets/allocations`: allocate an asset to a project or department with a share percentage, end an allocation, log hours (1–24) against it; utilization report with idle / under-used flags and configurable hours and threshold; hours by project and department.
+- Backend: new `GET /api/v1/assets/vehicles/<id>/info/incidents` (incidents could only be closed right after reporting); test added (open→closed, 403 without view).
+- Server refusals (electric vehicle fuel log, over-allocation, licence expired) are shown as returned.
+
+**Tested**: backend fleet tests pass (7); 389 frontend tests (10 new in `fleet.test.tsx`), tsc clean, build OK, 0 vulnerabilities.
+
+**Not done**: allocation to a cost centre (no cost-centre API in the frontend yet — project and department only); fuel logs are not listed, only the efficiency they produce; real-browser run against Keycloak.
+
+## F38 — Quality: dashboard, non-conformances, my actions
+
+**Implemented**
+- `/app/quality/dashboard`: tiles for open NCRs, CAPAs, overdue work, inspections, holds, complaints, findings, risks, compliance; severity and supplier-status breakdowns.
+- `/app/quality/ncrs`: filterable list (status, severity, hide closed) and a raise dialog that requires a source record unless the source is Other.
+- `/app/quality/ncrs/:id`: status-driven actions (edit investigation, assign, contain with optional hold, submit, resubmit after changes requested, dismiss, raise CAPA, start implementation, request verification, verify and close, reopen). Shared panels for actions, evidence (upload and download), costs and history.
+- `/app/quality/my-actions`: assigned actions with overdue flag and completion note.
+- Shared pieces: `shared/lib/fileDownload.ts`, `features/quality/{names,panels}`.
+
+**Tested**: 11 new tests (validators, permission gating, source-record rule, submission gate, resubmit detection, server refusal display, dashboard, my actions). Full suite 400 passed, `tsc -b` clean, build OK, `npm audit` 0 vulnerabilities.
+
+**Not done**: CAPA pages, inspections and holds, audits, supplier quality, complaints, risks, equipment, project QA, plans and reports, config admin. Not run in a real browser against Keycloak and the backend. The server remains the authority for every rule the UI pre-checks.
+
+## F39 — Quality: CAPA
+
+**Implemented**
+- `/app/quality/capas`: list with status, kind and overdue filters; "New CAPA" dialog (kind, title, trigger, source record unless Other, problem, owner, effectiveness reviewer, due date). The owner and reviewer must differ.
+- `/app/quality/capas/:id`: plan editor, root cause analysis (method from configuration), submit (pre-checks analysis, plan and at least one corrective or preventive action), resubmit after changes requested, start implementation, mark implemented (pre-checks that all actions are complete and evidence is attached), verify effectiveness (effective closes; not effective returns it to analysis), cancel. Shows past effectiveness reviews, actions, evidence and history.
+- The NCR page's "Open the linked CAPA" link now resolves.
+- New API: `listCapas`, `getCapa`, `createCapa`, `updateCapa`, `addCapaRootCause`, `capaAction`.
+
+**Tested**: 10 new tests (validators, permission gating, owner and reviewer rule, submit and implement gates, resubmit detection, server refusal on effectiveness). Full suite 410 passed, `tsc -b` clean, build OK, `npm audit` 0 vulnerabilities. No backend changes.
+
+**Not done**: the reviewer-only check is enforced by the server, not hidden in the UI (the UI does not know the signed-in user id). Inspections, holds, audits, supplier quality, complaints, risks, equipment, project QA, plans, reports and config admin remain. Not run in a real browser against Keycloak and the backend.
+
+## F40 — Quality: inspection plans, inspections, holds
+
+**Implemented**
+- `/app/quality/inspection-plans` and `/:id`: list by stage; create (stage, subject, sampling all/percent/fixed with validation, ITP flag); parameter table with measured, pass/fail and text parameters, limits, mandatory and critical flags; add and retire parameters. A note explains that changes after use raise the revision.
+- `/app/quality/inspections` and `/:id`: list by status, result and stage; schedule; start; record a result per parameter (measured value, pass/fail, text) with a required reason to correct an existing result (superseded results listed); record defects (types from configuration); complete (pre-checks mandatory results, quantities, conditional-acceptance note; the server decides the result and, on failure, places the hold and raises the NCR); cancel; schedule a re-inspection of a failed or conditional one. Links to the holds and NCRs a failure created.
+- `/app/quality/holds` and `/:id`: list by status; place a hold (product, optional lot and quantity, reason); decide disposition, release (needs an accepting disposition), reject (needs reject or scrap). Without `quality.hold.release` the page says only releasers can decide.
+- New API hooks for plans, parameters, inspections, results, defects and holds.
+
+**Tested**: 18 new tests (validators; plan, parameter, schedule, result, correction, completion gates; hold placement; disposition and release gates; separation-of-duties refusal; permission gating). Full suite 428 passed, `tsc -b` clean, build OK, `npm audit` 0 vulnerabilities. No backend changes.
+
+**Not done**: equipment selection when starting an inspection (needs the equipment pages), inspection evidence is shown and uploadable but not tested beyond the shared panel, the place-hold UI does not know the signed-in user so separation of duties is shown from the server's refusal. Audits, supplier quality, complaints, risks, equipment, project QA, plans and standards, reports and config admin remain. Not run in a real browser against Keycloak and the backend.

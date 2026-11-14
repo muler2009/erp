@@ -1,3 +1,18 @@
+import { FleetPage } from "../features/assets/FleetPage";
+import { CapaListPage } from "../features/quality/CapaListPage";
+import { CapaPage } from "../features/quality/CapaPage";
+import { InspectionPlansPage, InspectionPlanPage } from "../features/quality/InspectionPlansPage";
+import { InspectionsPage as QualityInspectionsPage } from "../features/quality/InspectionsPage";
+import { InspectionPage } from "../features/quality/InspectionPage";
+import { HoldsPage, HoldPage } from "../features/quality/HoldsPage";
+import { MyActionsPage } from "../features/quality/MyActionsPage";
+import { NcrListPage } from "../features/quality/NcrListPage";
+import { NcrPage } from "../features/quality/NcrPage";
+import { QualityDashboardPage } from "../features/quality/QualityDashboardPage";
+import { AllocationsPage } from "../features/assets/AllocationsPage";
+import { DisposalsPage } from "../features/assets/DisposalsPage";
+import { CountsPage } from "../features/assets/CountsPage";
+import { PlanningPage } from "../features/assets/PlanningPage";
 import { InspectionsPage } from "../features/assets/InspectionsPage";
 import { CoveragePage } from "../features/assets/CoveragePage";
 import { MaintenancePage } from "../features/assets/MaintenancePage";
@@ -142,6 +157,23 @@ export function TenantApp() {
           <Route path="/app/assets/maintenance" element={<MaintenancePage />} />
           <Route path="/app/assets/inspections" element={<InspectionsPage />} />
           <Route path="/app/assets/coverage" element={<CoveragePage />} />
+          <Route path="/app/assets/disposals" element={<DisposalsPage />} />
+          <Route path="/app/assets/counts" element={<CountsPage />} />
+          <Route path="/app/assets/planning" element={<PlanningPage />} />
+          <Route path="/app/assets/fleet" element={<FleetPage />} />
+          <Route path="/app/assets/allocations" element={<AllocationsPage />} />
+          <Route path="/app/quality/dashboard" element={<QualityDashboardPage />} />
+          <Route path="/app/quality/ncrs" element={<NcrListPage />} />
+          <Route path="/app/quality/ncrs/:id" element={<NcrPage />} />
+          <Route path="/app/quality/my-actions" element={<MyActionsPage />} />
+          <Route path="/app/quality/capas" element={<CapaListPage />} />
+          <Route path="/app/quality/capas/:id" element={<CapaPage />} />
+          <Route path="/app/quality/inspection-plans" element={<InspectionPlansPage />} />
+          <Route path="/app/quality/inspection-plans/:id" element={<InspectionPlanPage />} />
+          <Route path="/app/quality/inspections" element={<QualityInspectionsPage />} />
+          <Route path="/app/quality/inspections/:id" element={<InspectionPage />} />
+          <Route path="/app/quality/holds" element={<HoldsPage />} />
+          <Route path="/app/quality/holds/:id" element={<HoldPage />} />
           <Route path="/app/assets/capitalizations" element={<CapitalizationsPage />} />
           <Route path="/app/projects/my-tasks" element={<MyTasksPage />} />
           <Route path="/app/hr/attendance-admin" element={<AttendanceAdminPage />} />
