@@ -29,7 +29,7 @@ def checklist_dict(c):
 
 def finding_dict(f):
     return {"id": str(f.id), "number": f.number, "audit_id": str(f.audit_id), "finding_type": f.finding_type, "severity": f.severity, "description": f.description, "requirement_ref": f.requirement_ref,
-            "status": f.status, "due_date": f.due_date.isoformat() if f.due_date else None, "owner_id": str(f.owner_id) if f.owner_id else None, "capa_id": str(f.capa_id) if f.capa_id else None,
+            "checklist_item_id": str(f.checklist_item_id) if f.checklist_item_id else None, "status": f.status, "due_date": f.due_date.isoformat() if f.due_date else None, "owner_id": str(f.owner_id) if f.owner_id else None, "capa_id": str(f.capa_id) if f.capa_id else None,
             "closure_note": f.closure_note, "actions": core.list_actions("finding", f.id)}
 
 

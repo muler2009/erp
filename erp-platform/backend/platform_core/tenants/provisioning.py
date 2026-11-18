@@ -39,6 +39,7 @@ STEPS = [
     ("admin_role", True),
     ("health_check", True),
     ("activate", True),
+    ("send_setup_email", False),
     ("notify_admin", False),
 ]
 
@@ -151,7 +152,8 @@ def _run_locked(job):
     warnings = False
     ordered = {s.name: s for s in job.steps.all()}
     for name, required in STEPS:
-        step = ordered[name]
+        # Jobs created before a step existed gain it on resume.
+        step = ordered.get(name) or ProvisioningStep.objects.create(job=job, name=name, required=required)
         if step.status == ProvisioningStep.Status.SUCCEEDED:
             continue
         step.attempts += 1
@@ -265,8 +267,44 @@ def step_admin_identity(job, tenant):
     if membership.status == TenantMembership.Status.INVITED and linked:
         membership.status = TenantMembership.Status.ACTIVE
         membership.save(update_fields=["status"])
-    if result.created:
-        provisioner.send_required_actions_email(result.subject)
+
+
+def step_send_setup_email(job, tenant):
+    """Ask Keycloak to email the new administrator the password / MFA set-up link.
+
+    A separate, retryable, non-required step: a mail outage at the identity provider must not block activation of an
+    otherwise complete tenant, and a retry of the job resends it. Sent only to an account this platform linked.
+    """
+    membership = TenantMembership.objects.select_related("user").get(tenant=tenant, user__email__iexact=job.admin_email)
+    identity = ExternalIdentity.objects.filter(user=membership.user, issuer=settings.OIDC["ISSUER"]).first()
+    if identity is None:
+        return  # not linked: the administrator signs in through the invite link instead
+    get_provisioner().send_required_actions_email(identity.subject)
+    record_platform_event("tenant.admin_setup_email_requested", tenant_id=tenant.id, target_type="tenant", target_id=tenant.id)
+
+
+def resend_admin_setup_email(tenant):
+    """Platform action: send the tenant administrator's set-up email again (for example after a mail outage).
+
+    A finished job is never re-run, so this is the explicit way to repeat the one non-required step that can fail
+    without blocking activation. Outcome is recorded on that step of the latest job."""
+    job = ProvisioningJob.objects.filter(tenant=tenant).order_by("-created_at").first()
+    if job is None or tenant.status != Tenant.Status.ACTIVE:
+        raise DomainError("Only an active tenant's administrator can be sent the set-up email.", code="invalid_state_transition")
+    step = job.steps.filter(name="send_setup_email").first() or ProvisioningStep.objects.create(job=job, name="send_setup_email", required=False)
+    step.attempts += 1
+    step.started_at = timezone.now()
+    try:
+        step_send_setup_email(job, tenant)
+    except Exception as exc:  # noqa: BLE001 - recorded and surfaced to the caller as a domain error
+        logger.exception("resending the administrator set-up email failed", extra={"extra_fields": {"tenant": tenant.slug}})
+        step.status, step.error = ProvisioningStep.Status.FAILED, f"{type(exc).__name__}: {exc}"[:2000]
+        step.finished_at = timezone.now()
+        step.save(update_fields=["status", "error", "attempts", "started_at", "finished_at"])
+        raise DomainError("The identity provider could not send the email. Check its mail settings and try again.", code="identity_mail_failed") from exc
+    step.status, step.error = ProvisioningStep.Status.SUCCEEDED, ""
+    step.finished_at = timezone.now()
+    step.save(update_fields=["status", "error", "attempts", "started_at", "finished_at"])
 
 
 def step_admin_role(job, tenant):
@@ -343,5 +381,6 @@ STEP_FUNCS = {
     "admin_role": step_admin_role,
     "health_check": step_health_check,
     "activate": step_activate,
+    "send_setup_email": step_send_setup_email,
     "notify_admin": step_notify_admin,
 }

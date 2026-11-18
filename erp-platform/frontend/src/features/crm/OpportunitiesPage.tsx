@@ -1,13 +1,15 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
+import { Link } from "react-router";
 
-import { useListOpportunitiesQuery, useListStagesQuery, useOpportunityActionMutation } from "../../shared/api/endpoints";
+import { useCreateCrmOpportunityMutation, useListCrmAccountsQuery, useListOpportunitiesQuery, useListStagesQuery, useOpportunityActionMutation } from "../../shared/api/endpoints";
 import { errorMessage } from "../../shared/api/errors";
 import type { Opportunity } from "../../shared/api/types";
 import { formatMoney } from "../../shared/lib/money";
 import { useAccess } from "../../shared/permissions/usePermissions";
 import { DataTable } from "../../shared/ui/DataTable";
 import { useAccountNames } from "../../shared/ui/useAccountNames";
+import { ActionDialog as FormDialog } from "../hr/ActionDialog";
 import { Badge, Button, FormField, Modal, PageHeader, inputClass } from "../../shared/ui/primitives";
 
 const tone = (s: string) => (s === "WON" ? "green" : s === "LOST" ? "red" : "amber");
@@ -58,9 +60,13 @@ export function OpportunitiesPage() {
   const [target, setTarget] = useState<Opportunity | null>(null);
   const { can } = useAccess();
   const manage = can("crm.manage");
+  const [creating, setCreating] = useState(false);
+  const accounts = useListCrmAccountsQuery(undefined, { skip: !creating });
+  const stagesQ = useListStagesQuery(undefined, { skip: !creating });
+  const [createOpp] = useCreateCrmOpportunityMutation();
   const columns = useMemo<ColumnDef<Opportunity>[]>(() => {
     const cols: ColumnDef<Opportunity>[] = [
-      { header: "Opportunity", accessorKey: "name" },
+      { header: "Opportunity", cell: ({ row }) => <Link className="text-indigo-700 hover:underline" to={`/app/crm/opportunities/${row.original.id}`}>{row.original.name}</Link> },
       { header: "Account", cell: ({ row }) => name(row.original.account) },
       { header: "Stage", cell: ({ row }) => `${row.original.stage.toLowerCase()} (${row.original.probability}%)` },
       { header: "Amount", cell: ({ row }) => <span className="block text-right">{formatMoney(row.original.amount)} {row.original.currency}</span> },
@@ -72,7 +78,18 @@ export function OpportunitiesPage() {
   }, [manage, name]);
   return (
     <>
-      <PageHeader title="Opportunities" description="The sales pipeline." />
+      <PageHeader title="Opportunities" description="The sales pipeline." actions={manage ? <Button onClick={() => setCreating(true)}>New opportunity</Button> : undefined} />
+      {creating && (
+        <FormDialog title="New opportunity" cta="Create opportunity" open onClose={() => setCreating(false)} initial={{ stage: "PROSPECTING" }}
+          fields={[{ name: "name", label: "Name", required: true }, { name: "account", label: "Customer account", required: true, options: (accounts.data?.results ?? []).map((a) => [a.id, a.name]) },
+            { name: "amount", label: "Amount" }, { name: "currency", label: "Currency (3 letters)" }, { name: "expected_close", label: "Expected close", type: "date" },
+            { name: "stage", label: "Stage", options: (stagesQ.data ?? []).filter((s) => !s.is_won && !s.is_lost).map((s) => [s.code, s.name]) }]}
+          submit={async (v) => {
+            const amount = (v.amount ?? "").trim() || "0";
+            if (!/^\d+(\.\d{1,2})?$/.test(amount)) throw new Error("The amount must be a number with at most 2 decimals.");
+            await createOpp({ name: v.name!.trim(), account: v.account, amount, currency: (v.currency ?? "").trim().toUpperCase(), stage: v.stage || "PROSPECTING", ...(v.expected_close ? { expected_close: v.expected_close } : {}) }).unwrap();
+          }} />
+      )}
       <label className="mb-3 flex items-center gap-2 text-sm">Status
         <select className={`${inputClass} w-auto`} value={status} onChange={(e) => { setStatus(e.target.value); setCursor(null); }}>
           <option value="">All</option><option value="OPEN">Open</option><option value="WON">Won</option><option value="LOST">Lost</option>

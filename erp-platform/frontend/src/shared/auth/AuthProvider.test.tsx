@@ -14,10 +14,13 @@ const cfg = { context: "tenant", oidc: { issuer: "http://kc/realms/erp", client_
 const Child = () => <p>{useAuth().status}</p>;
 
 describe("AuthProvider", () => {
+  // The session-lost handler is registered in an effect after the render commits. Tests that reach "authenticated" wait for it,
+  // otherwise the effect can run after afterEach has restored the real function, which throws "not initialised".
+  let registered: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
     server.use(http.get("*/api/v1/public/config", () => HttpResponse.json(cfg)));
     vi.spyOn(svc, "initAuth").mockReturnValue({} as never);
-    vi.spyOn(svc, "onSessionLost").mockReturnValue(() => {});
+    registered = vi.spyOn(svc, "onSessionLost").mockReturnValue(() => {});
   });
 
   it("redirects to sign-in, remembering the path, when there is no session", async () => {
@@ -33,6 +36,7 @@ describe("AuthProvider", () => {
     vi.spyOn(svc, "currentUser").mockResolvedValue({} as never);
     render(<AuthProvider><Child /></AuthProvider>);
     expect(await screen.findByText("authenticated")).toBeInTheDocument();
+    await waitFor(() => expect(registered).toHaveBeenCalled());
   });
 
   it("completes the callback once and returns to the saved path", async () => {
@@ -41,6 +45,7 @@ describe("AuthProvider", () => {
     vi.spyOn(svc, "currentUser").mockResolvedValue({} as never);
     render(<AuthProvider><Child /></AuthProvider>);
     expect(await screen.findByText("authenticated")).toBeInTheDocument();
+    await waitFor(() => expect(registered).toHaveBeenCalled());
     expect(done).toHaveBeenCalledTimes(1);
     expect(window.location.pathname).toBe("/app/dashboard");
   });

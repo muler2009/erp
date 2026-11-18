@@ -308,3 +308,18 @@ def test_user_directory_is_minimal_and_open_to_any_active_member(member_factory)
     assert emp.get("/api/v1/directory/users?q=e").status_code == 400  # too short: no enumeration
     assert emp.get("/api/v1/directory/users").status_code == 400
     assert emp.get("/api/v1/directory/users?q=acme.test").json()["results"] == []  # e-mail is not searchable
+
+
+@pytest.mark.django_db
+def test_directory_resolves_names_for_known_ids_including_deactivated_colleagues(owner_api, member_factory):
+    emp, membership = member_factory("former@acme.test", "former-sub", ["employee"])
+    owner_api.post(f"/api/v1/users/{membership.id}/deactivate")  # a former colleague's name is still needed on old records
+    uid = str(membership.user_id)
+    rows = owner_api.get(f"/api/v1/directory/users?ids={uid}").json()["results"]
+    assert [set(r) for r in rows] == [{"id", "display_name"}]
+    assert rows[0]["id"] == uid
+    stranger = "00000000-0000-4000-8000-000000000000"
+    assert owner_api.get(f"/api/v1/directory/users?ids={stranger}").json()["results"] == []  # not a member: nothing
+    assert owner_api.get("/api/v1/directory/users?ids=not-a-uuid").status_code == 400
+    many = ",".join(["00000000-0000-4000-8000-0000000000%02d" % i for i in range(51)])
+    assert owner_api.get(f"/api/v1/directory/users?ids={many}").status_code == 400

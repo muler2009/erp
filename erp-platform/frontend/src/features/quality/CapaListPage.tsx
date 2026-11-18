@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { useCreateCapaMutation, useListCapasQuery } from "../../shared/api/endpoints";
 import { errorMessage } from "../../shared/api/errors";
 import { useAccess } from "../../shared/permissions/usePermissions";
+import { UserSelect } from "../../shared/ui/UserSelect";
 import { Badge, Button, Card, EmptyState, ErrorState, FormField, Modal, PageHeader, Spinner, inputClass } from "../../shared/ui/primitives";
 import { pretty } from "../hr/EmployeeDialogs";
 import { useUserNames, useUserOptions } from "./names";
@@ -75,8 +76,8 @@ export function CapaListPage() {
           <FormField label="Title" htmlFor="cp-title"><input id="cp-title" className={inputClass} value={n.title} onChange={(e) => setN({ ...n, title: e.target.value })} /></FormField>
           <FormField label="Triggered by" htmlFor="cp-src"><select id="cp-src" className={inputClass} value={n.source_type} onChange={(e) => setN({ ...n, source_type: e.target.value })}>{CAPA_SOURCES.map((s) => <option key={s} value={s}>{pretty(s)}</option>)}</select></FormField>
           {n.source_type !== "OTHER" && <FormField label="Source record ID" htmlFor="cp-sid"><input id="cp-sid" className={inputClass} value={n.source_id} onChange={(e) => setN({ ...n, source_id: e.target.value })} /></FormField>}
-          <FormField label="Owner" htmlFor="cp-own"><select id="cp-own" className={inputClass} value={n.owner_id} onChange={(e) => setN({ ...n, owner_id: e.target.value })}><option value="">Choose…</option>{people.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></FormField>
-          <FormField label="Effectiveness reviewer" htmlFor="cp-rev"><select id="cp-rev" className={inputClass} value={n.reviewer_id} onChange={(e) => setN({ ...n, reviewer_id: e.target.value })}><option value="">Choose…</option>{people.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></FormField>
+          <FormField label="Owner" htmlFor="cp-own"><UserSelect id="cp-own" value={n.owner_id} onChange={(x) => setN({ ...n, owner_id: x })} options={people} placeholder="Choose…" /></FormField>
+          <FormField label="Effectiveness reviewer" htmlFor="cp-rev"><UserSelect id="cp-rev" value={n.reviewer_id} onChange={(x) => setN({ ...n, reviewer_id: x })} options={people} placeholder="Choose…" /></FormField>
           <FormField label="Due date" htmlFor="cp-due"><input id="cp-due" type="date" className={inputClass} value={n.due_date} onChange={(e) => setN({ ...n, due_date: e.target.value })} /></FormField>
         </div>
         <FormField label="Problem" htmlFor="cp-prob"><textarea id="cp-prob" className={inputClass} value={n.problem} onChange={(e) => setN({ ...n, problem: e.target.value })} /></FormField>

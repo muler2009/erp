@@ -8,7 +8,7 @@ from platform_core.catalog import DEFAULT_TENANT_ROLES, MODULES, OWNER_ROLE
 from platform_core.tenant_audit.models import TenantAuditEvent
 from platform_core.audit.models import PlatformAuditEvent
 from platform_core.tenants.models import Domain, ModuleEntitlement, ProvisioningJob, Tenant
-from platform_core.tenants.provisioning import request_tenant, run_provisioning
+from platform_core.tenants.provisioning import request_tenant, resend_admin_setup_email, run_provisioning
 from platform_core.users.models import ExternalIdentity, TenantMembership
 from shared.api.errors import DomainError, ValidationFailed
 
@@ -145,3 +145,51 @@ def test_tenant_status_gate_blocks_unprovisioned_tenant_hosts(world, fake_identi
     response = Api("pending-co.localhost").get("/api/v1/me")
     assert response.status_code == 503
     assert response.json()["error"]["code"] == "tenant_unavailable"
+
+
+@pytest.mark.django_db
+def test_setup_email_failure_does_not_block_activation_and_a_retry_resends_it(world, fake_identity):
+    fake_identity.fail_setup_email = True  # for example Keycloak has no SMTP configured
+    job, _ = _request("hooli")
+    run_provisioning(job.id)
+    tenant = Tenant.objects.get(slug="hooli")
+    job.refresh_from_db()
+    steps = {s.name: s for s in job.steps.all()}
+    assert tenant.status == "ACTIVE"  # a mail outage never leaves a complete tenant inactive
+    assert job.status == "SUCCEEDED_WITH_WARNINGS"
+    assert steps["send_setup_email"].status == "FAILED"
+    assert "cannot send mail" in steps["send_setup_email"].error
+    membership = TenantMembership.objects.get(tenant=tenant)
+    assert membership.status == "ACTIVE"  # the account was linked before the email step
+    assert fake_identity.emails_sent == []
+    assert [m.to for m in mail.outbox][-1] == ["boss@hooli.test"]  # the application's own notification still went out
+
+    run_provisioning(job.id)  # a finished job is terminal: it does not re-run the failed email step
+    assert ProvisioningJob.objects.get(id=job.id).steps.get(name="send_setup_email").status == "FAILED"
+    with pytest.raises(DomainError) as e:
+        resend_admin_setup_email(tenant)  # still failing: the platform operator is told, and the step records it
+    assert e.value.get_codes() == "identity_mail_failed"
+
+    fake_identity.fail_setup_email = False
+    resend_admin_setup_email(tenant)
+    step = ProvisioningJob.objects.get(id=job.id).steps.get(name="send_setup_email")
+    assert step.status == "SUCCEEDED"
+    assert step.attempts == 3
+    assert len(fake_identity.emails_sent) == 1
+
+
+@pytest.mark.django_db
+def test_resend_is_refused_for_a_tenant_that_is_not_active(world, fake_identity):
+    job, _ = _request("raviga")
+    with pytest.raises(DomainError):
+        resend_admin_setup_email(Tenant.objects.get(slug="raviga"))  # still PENDING
+
+
+@pytest.mark.django_db
+def test_a_job_created_before_a_step_existed_gains_it_on_resume(world, fake_identity):
+    job, _ = _request("pied")
+    job.steps.filter(name="send_setup_email").delete()  # as if the job predates the step
+    run_provisioning(job.id)
+    steps = {s.name: s for s in ProvisioningJob.objects.get(id=job.id).steps.all()}
+    assert steps["send_setup_email"].status == "SUCCEEDED"
+    assert Tenant.objects.get(slug="pied").status == "ACTIVE"

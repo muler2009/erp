@@ -10,7 +10,7 @@ GETS = [
     "/api/v1/crm/cases", "/api/v1/crm/cases/sla", "/api/v1/crm/cases/report", "/api/v1/crm/insights/segmentation", "/api/v1/crm/insights/retention", "/api/v1/crm/insights/satisfaction",
     "/api/v1/crm/insights/profitability", "/api/v1/crm/insights/dashboard", "/api/v1/crm/teams", "/api/v1/crm/territories", "/api/v1/crm/portfolio",
     "/api/v1/sales/catalog", "/api/v1/sales/pricing/discount-rules", "/api/v1/sales/pricing/history", "/api/v1/sales/contracts", "/api/v1/sales/return-requests", "/api/v1/sales/return-requests/report",
-    "/api/v1/sales/deliveries/performance", "/api/v1/sales/receivables/aging", "/api/v1/sales/backorders", "/api/v1/sales/commission-plans", "/api/v1/sales/commissions",
+    "/api/v1/sales/deliveries/performance", "/api/v1/sales/deliveries", "/api/v1/sales/receivables/aging", "/api/v1/sales/backorders", "/api/v1/sales/commission-plans", "/api/v1/sales/commissions",
     "/api/v1/sales/analytics/backlog", "/api/v1/sales/analytics/forecast",
 ]
 
@@ -88,3 +88,28 @@ def test_pricing_quotation_and_order_control_over_http(api_env):
     assert api["rep2"].get(f"/api/v1/sales/accounts/{acct}/statement?from=2026-01-01&to=2026-12-31").status_code == 404
     assert api["rep1"].get("/api/v1/sales/analytics/performance?from=2026-03-01&to=2026-03-31").status_code == 200
     assert api["rep1"].get("/api/v1/sales/analytics/performance?from=bad&to=2026-03-31").status_code == 400
+
+
+@pytest.mark.django_db
+def test_contacts_can_be_filtered_by_account_and_search_and_stay_private_to_the_owner(api_env):
+    env, api = api_env
+    a1 = api["rep1"].post("/api/v1/crm/accounts", {"name": "Filter One"}).json()["id"]
+    a2 = api["rep1"].post("/api/v1/crm/accounts", {"name": "Filter Two"}).json()["id"]
+    api["rep1"].post("/api/v1/crm/contacts", {"first_name": "Dawit", "last_name": "Alem", "email": "d@one.io", "account": a1})
+    api["rep1"].post("/api/v1/crm/contacts", {"first_name": "Sara", "last_name": "Bekele", "email": "s@two.io", "account": a2})
+    names = lambda r: sorted(c["first_name"] for c in r.json()["results"])  # noqa: E731
+    assert names(api["rep1"].get(f"/api/v1/crm/contacts?account={a1}")) == ["Dawit"]
+    assert names(api["rep1"].get("/api/v1/crm/contacts?q=bekele")) == ["Sara"]
+    assert names(api["rep1"].get("/api/v1/crm/contacts?q=two.io")) == ["Sara"]
+    assert api["rep1"].get("/api/v1/crm/contacts?account=not-an-id").status_code == 400
+    assert names(api["rep2"].get(f"/api/v1/crm/contacts?account={a1}")) == []  # not their record
+
+
+@pytest.mark.django_db
+def test_delivery_list_over_http_is_paginated_filtered_and_validates_status(api_env):
+    env, api = api_env
+    r = api["rep1"].get("/api/v1/sales/deliveries")
+    assert r.status_code == 200 and "results" in r.json()
+    assert api["rep1"].get("/api/v1/sales/deliveries?status=DELIVERED").status_code == 200
+    assert all("lines" in d for d in r.json()["results"])
+    assert api["rep1"].get("/api/v1/sales/deliveries?status=NOPE").status_code == 400

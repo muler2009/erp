@@ -60,5 +60,21 @@
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false
     }
+  ],
+  "users": [
+    {
+      "username": "service-account-erp-identity-admin",
+      "enabled": true,
+      "serviceAccountClientId": "erp-identity-admin",
+      "clientRoles": {
+        "realm-management": [
+          "manage-users",
+          "view-users",
+          "query-users",
+          "manage-clients",
+          "view-clients"
+        ]
+      }
+    }
   ]
 }

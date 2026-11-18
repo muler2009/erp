@@ -122,6 +122,22 @@ def test_failed_provisioning_is_visible_and_retryable_via_api(platform_api, fake
     assert platform_api.post(f"/api/v1/platform/tenants/{tenant.id}/provision").status_code == 409  # not failed anymore
 
 
+@pytest.mark.django_db
+def test_admin_setup_email_can_be_resent_via_api_and_is_audited(platform_api, fake_identity, commit):
+    fake_identity.fail_setup_email = True
+    with commit():
+        platform_api.post("/api/v1/platform/tenants", NEW_TENANT, Idempotency_Key="newco-3")
+    tenant = Tenant.objects.get(slug="newco")
+    assert tenant.status == "ACTIVE"  # a mail outage did not block activation
+    refused = platform_api.post(f"/api/v1/platform/tenants/{tenant.id}/resend-admin-setup")
+    assert refused.status_code >= 400 and refused.json()["error"]["code"] == "identity_mail_failed"
+    fake_identity.fail_setup_email = False
+    ok = platform_api.post(f"/api/v1/platform/tenants/{tenant.id}/resend-admin-setup")
+    assert ok.status_code == 200 and ok.json() == {"sent": True}
+    assert len(fake_identity.emails_sent) == 1
+    assert PlatformAuditEvent.objects.filter(action="tenant.admin_setup_email_resent", tenant_id=tenant.id).exists()
+
+
 # ------------------------------------------------------------------------- four-eyes: platform admins
 @pytest.mark.django_db
 def test_platform_admin_creation_needs_a_second_administrator(platform_api, second_admin, idp, commit):

@@ -11,6 +11,7 @@ class FakeIdentityProvisioner(IdentityProvisioner):
     users = {}
     redirect_uris = set()
     emails_sent = []
+    fail_setup_email = False
     fail_register_redirect = False
     _counter = itertools.count(1)
 
@@ -20,6 +21,7 @@ class FakeIdentityProvisioner(IdentityProvisioner):
         cls.redirect_uris = set()
         cls.emails_sent = []
         cls.fail_register_redirect = False
+        cls.fail_setup_email = False
 
     def ensure_user(self, email, display_name):
         if email in self.users:
@@ -29,6 +31,8 @@ class FakeIdentityProvisioner(IdentityProvisioner):
         return EnsureUserResult(subject=subject, created=True)
 
     def send_required_actions_email(self, subject):
+        if self.fail_setup_email:
+            raise RuntimeError("keycloak cannot send mail")
         self.emails_sent.append(subject)
 
     def register_redirect_uris(self, redirect_uri, post_logout_uri, spa_redirect_uri=""):

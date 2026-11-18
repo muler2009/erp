@@ -5,6 +5,21 @@ import { InspectionPlansPage, InspectionPlanPage } from "../features/quality/Ins
 import { InspectionsPage as QualityInspectionsPage } from "../features/quality/InspectionsPage";
 import { InspectionPage } from "../features/quality/InspectionPage";
 import { HoldsPage, HoldPage } from "../features/quality/HoldsPage";
+import { AuditsPage } from "../features/quality/AuditsPage";
+import { AuditPage } from "../features/quality/AuditPage";
+import { FindingsPage, FindingPage } from "../features/quality/FindingsPage";
+import { ChecklistTemplatesPage } from "../features/quality/ChecklistTemplatesPage";
+import { SupplierQualityListPage, SupplierQualityPage } from "../features/quality/SupplierQualityPage";
+import { ScarsPage, ScarPage } from "../features/quality/ScarsPage";
+import { ComplaintsPage, ComplaintPage } from "../features/quality/ComplaintsPage";
+import { RisksPage, RiskPage } from "../features/quality/RisksPage";
+import { ImprovementPage, InitiativePage } from "../features/quality/ImprovementPage";
+import { EquipmentDetailPage, EquipmentPage } from "../features/quality/EquipmentPage";
+import { InspectionRequestsPage, PunchListPage, RequestPage } from "../features/quality/ProjectQaPage";
+import { MasterPlanPage, MasterPlansPage } from "../features/quality/MasterPlansPage";
+import { CompliancePage, StandardPage, StandardsPage } from "../features/quality/StandardsPage";
+import { ReportsPage as QualityReportsPage } from "../features/quality/ReportsPage";
+import { QualitySettingsPage } from "../features/quality/QualitySettingsPage";
 import { MyActionsPage } from "../features/quality/MyActionsPage";
 import { NcrListPage } from "../features/quality/NcrListPage";
 import { NcrPage } from "../features/quality/NcrPage";
@@ -48,7 +63,11 @@ import { useGetMeQuery } from "../shared/api/endpoints";
 import { AccessProvider } from "../shared/permissions/usePermissions";
 import { ErrorState, Spinner } from "../shared/ui/primitives";
 import { DashboardPage } from "../features/dashboard/DashboardPage";
-import { DepartmentsPage } from "../features/organization/DepartmentsPage";
+import { CompanyPage } from "../features/organization/CompanyPage";
+import { MembersPage } from "../features/organization/MembersPage";
+import { NumberingPage } from "../features/organization/NumberingPage";
+import { ReferencePage } from "../features/organization/ReferencePage";
+import { StructurePage } from "../features/organization/StructurePage";
 import { AccountsPage } from "../features/finance/AccountsPage";
 import { InvoicesPage } from "../features/finance/InvoicesPage";
 import { JournalsPage } from "../features/finance/JournalsPage";
@@ -61,6 +80,11 @@ import { RfqDetailPage } from "../features/procurement/RfqDetailPage";
 import { RfqsPage } from "../features/procurement/RfqsPage";
 import { PurchaseOrdersPage } from "../features/procurement/PurchaseOrdersPage";
 import { RequisitionsPage } from "../features/procurement/RequisitionsPage";
+import { ProcurementOverviewPage } from "../features/procurement/OverviewPage";
+import { ProcurementAnalyticsPage } from "../features/procurement/AnalyticsPage";
+import { ReceivingPage } from "../features/procurement/ReceivingPage";
+import { ReturnsClaimsPage } from "../features/procurement/ReturnsClaimsPage";
+import { PurchaseContractsPage } from "../features/procurement/PurchaseContractsPage";
 import { SuppliersPage } from "../features/procurement/SuppliersPage";
 import { ProductsPage } from "../features/inventory/ProductsPage";
 import { MyTasksPage } from "../features/projects/MyTasksPage";
@@ -84,9 +108,35 @@ import { StockCountPage, StockCountsPage } from "../features/inventory/StockCoun
 import { StockPage } from "../features/inventory/StockPage";
 import { ValuationPage } from "../features/inventory/ValuationPage";
 import { WarehousesPage } from "../features/inventory/WarehousesPage";
+import { InsightsPage } from "../features/crm/InsightsPage";
+import { TeamsPage } from "../features/crm/TeamsPage";
+import { ServiceCaseDetailPage } from "../features/crm/ServiceCaseDetailPage";
+import { ServiceCasesPage } from "../features/crm/ServiceCasesPage";
+import { ServiceReportPage } from "../features/crm/ServiceReportPage";
+import { CampaignDetailPage } from "../features/crm/CampaignDetailPage";
+import { CampaignsPage } from "../features/crm/CampaignsPage";
+import { ActivitiesPage } from "../features/crm/ActivitiesPage";
+import { CrmReportsPage } from "../features/crm/CrmReportsPage";
+import { OpportunityDetailPage } from "../features/crm/OpportunityDetailPage";
+import { AccountDetailPage } from "../features/crm/AccountDetailPage";
+import { CrmAccountsPage } from "../features/crm/AccountsPage";
+import { ContactsPage } from "../features/crm/ContactsPage";
 import { LeadsPage } from "../features/crm/LeadsPage";
 import { OpportunitiesPage } from "../features/crm/OpportunitiesPage";
 import { OrdersPage } from "../features/sales/OrdersPage";
+import { DeliveriesPage } from "../features/sales/DeliveriesPage";
+import { DeliveryDetailPage } from "../features/sales/DeliveryDetailPage";
+import { AcknowledgementsPage } from "../features/documents/AcknowledgementsPage";
+import { DocumentDetailPage } from "../features/documents/DocumentDetailPage";
+import { DocumentsPage } from "../features/documents/DocumentsPage";
+import { BackordersPage } from "../features/sales/BackordersPage";
+import { AgingPage } from "../features/sales/AgingPage";
+import { ContractsPage } from "../features/sales/ContractsPage";
+import { ContractDetailPage } from "../features/sales/ContractDetailPage";
+import { CommissionsPage } from "../features/sales/CommissionsPage";
+import { SalesAnalyticsPage } from "../features/sales/AnalyticsPage";
+import { ReturnsPage } from "../features/sales/ReturnsPage";
+import { PricingPage } from "../features/sales/PricingPage";
 import { QuotationsPage } from "../features/sales/QuotationsPage";
 import { BalanceSheetPage, ProfitLossPage } from "../features/finance/StatementPages";
 import { StatementPage, StatementsPage } from "../features/finance/ReconciliationPages";
@@ -104,7 +154,12 @@ export function TenantApp() {
       <Routes>
         <Route element={<AppLayout me={me} />}>
           <Route path="/app/dashboard" element={<DashboardPage />} />
-          <Route path="/app/organization/departments" element={<DepartmentsPage />} />
+          <Route path="/app/organization/company" element={<CompanyPage />} />
+          <Route path="/app/organization/structure" element={<StructurePage />} />
+          <Route path="/app/organization/reference" element={<ReferencePage />} />
+          <Route path="/app/organization/numbering" element={<NumberingPage />} />
+          <Route path="/app/organization/members" element={<MembersPage />} />
+          <Route path="/app/organization/departments" element={<Navigate to="/app/organization/structure" replace />} />
           <Route path="/app/settings/users" element={<UsersPage />} />
           <Route path="/app/settings/roles" element={<RolesPage />} />
           <Route path="/app/finance/accounts" element={<AccountsPage />} />
@@ -113,6 +168,11 @@ export function TenantApp() {
           <Route path="/app/finance/trial-balance" element={<TrialBalancePage />} />
           <Route path="/app/approvals" element={<InboxPage />} />
           <Route path="/app/approvals/requests" element={<RequestsPage currentUserId={me.user.id} />} />
+          <Route path="/app/procurement/overview" element={<ProcurementOverviewPage />} />
+          <Route path="/app/procurement/analytics" element={<ProcurementAnalyticsPage />} />
+          <Route path="/app/procurement/receiving" element={<ReceivingPage />} />
+          <Route path="/app/procurement/returns" element={<ReturnsClaimsPage />} />
+          <Route path="/app/procurement/contracts" element={<PurchaseContractsPage />} />
           <Route path="/app/procurement/suppliers" element={<SuppliersPage />} />
           <Route path="/app/procurement/requisitions" element={<RequisitionsPage />} />
           <Route path="/app/procurement/rfqs" element={<RfqsPage />} />
@@ -174,6 +234,33 @@ export function TenantApp() {
           <Route path="/app/quality/inspections/:id" element={<InspectionPage />} />
           <Route path="/app/quality/holds" element={<HoldsPage />} />
           <Route path="/app/quality/holds/:id" element={<HoldPage />} />
+          <Route path="/app/quality/audits" element={<AuditsPage />} />
+          <Route path="/app/quality/audits/:id" element={<AuditPage />} />
+          <Route path="/app/quality/findings" element={<FindingsPage />} />
+          <Route path="/app/quality/findings/:id" element={<FindingPage />} />
+          <Route path="/app/quality/checklist-templates" element={<ChecklistTemplatesPage />} />
+          <Route path="/app/quality/suppliers" element={<SupplierQualityListPage />} />
+          <Route path="/app/quality/suppliers/:id" element={<SupplierQualityPage />} />
+          <Route path="/app/quality/scars" element={<ScarsPage />} />
+          <Route path="/app/quality/scars/:id" element={<ScarPage />} />
+          <Route path="/app/quality/complaints" element={<ComplaintsPage />} />
+          <Route path="/app/quality/complaints/:id" element={<ComplaintPage />} />
+          <Route path="/app/quality/risks" element={<RisksPage />} />
+          <Route path="/app/quality/risks/:id" element={<RiskPage />} />
+          <Route path="/app/quality/improvement" element={<ImprovementPage />} />
+          <Route path="/app/quality/initiatives/:id" element={<InitiativePage />} />
+          <Route path="/app/quality/equipment" element={<EquipmentPage />} />
+          <Route path="/app/quality/equipment/:id" element={<EquipmentDetailPage />} />
+          <Route path="/app/quality/inspection-requests" element={<InspectionRequestsPage />} />
+          <Route path="/app/quality/inspection-requests/:id" element={<RequestPage />} />
+          <Route path="/app/quality/punch-list" element={<PunchListPage />} />
+          <Route path="/app/quality/plans" element={<MasterPlansPage />} />
+          <Route path="/app/quality/plans/:id" element={<MasterPlanPage />} />
+          <Route path="/app/quality/standards" element={<StandardsPage />} />
+          <Route path="/app/quality/standards/:id" element={<StandardPage />} />
+          <Route path="/app/quality/compliance" element={<CompliancePage />} />
+          <Route path="/app/quality/reports" element={<QualityReportsPage />} />
+          <Route path="/app/quality/settings" element={<QualitySettingsPage />} />
           <Route path="/app/assets/capitalizations" element={<CapitalizationsPage />} />
           <Route path="/app/projects/my-tasks" element={<MyTasksPage />} />
           <Route path="/app/hr/attendance-admin" element={<AttendanceAdminPage />} />
@@ -189,9 +276,35 @@ export function TenantApp() {
           <Route path="/app/inventory/counts" element={<StockCountsPage />} />
           <Route path="/app/inventory/counts/:id" element={<StockCountPage />} />
           <Route path="/app/inventory/valuation" element={<ValuationPage />} />
+          <Route path="/app/crm/accounts" element={<CrmAccountsPage />} />
+          <Route path="/app/crm/accounts/:id" element={<AccountDetailPage />} />
+          <Route path="/app/crm/contacts" element={<ContactsPage />} />
           <Route path="/app/crm/leads" element={<LeadsPage />} />
           <Route path="/app/crm/opportunities" element={<OpportunitiesPage />} />
+          <Route path="/app/crm/opportunities/:id" element={<OpportunityDetailPage />} />
+          <Route path="/app/crm/activities" element={<ActivitiesPage />} />
+          <Route path="/app/crm/campaigns" element={<CampaignsPage />} />
+          <Route path="/app/crm/campaigns/:id" element={<CampaignDetailPage />} />
+          <Route path="/app/crm/cases" element={<ServiceCasesPage />} />
+          <Route path="/app/crm/cases/:id" element={<ServiceCaseDetailPage />} />
+          <Route path="/app/crm/service-report" element={<ServiceReportPage />} />
+          <Route path="/app/crm/teams" element={<TeamsPage />} />
+          <Route path="/app/crm/insights" element={<InsightsPage />} />
+          <Route path="/app/crm/reports" element={<CrmReportsPage />} />
           <Route path="/app/sales/quotations" element={<QuotationsPage />} />
+          <Route path="/app/sales/deliveries" element={<DeliveriesPage />} />
+          <Route path="/app/sales/deliveries/:id" element={<DeliveryDetailPage />} />
+          <Route path="/app/documents" element={<DocumentsPage />} />
+          <Route path="/app/documents/acknowledgements" element={<AcknowledgementsPage />} />
+          <Route path="/app/documents/:id" element={<DocumentDetailPage />} />
+          <Route path="/app/sales/backorders" element={<BackordersPage />} />
+          <Route path="/app/sales/aging" element={<AgingPage />} />
+          <Route path="/app/sales/contracts" element={<ContractsPage />} />
+          <Route path="/app/sales/contracts/:id" element={<ContractDetailPage />} />
+          <Route path="/app/sales/commissions" element={<CommissionsPage />} />
+          <Route path="/app/sales/analytics" element={<SalesAnalyticsPage />} />
+          <Route path="/app/sales/returns" element={<ReturnsPage />} />
+          <Route path="/app/sales/pricing" element={<PricingPage />} />
           <Route path="/app/sales/orders" element={<OrdersPage />} />
           <Route path="/app/finance/payments" element={<PaymentsPage />} />
           <Route path="/app/finance/profit-loss" element={<ProfitLossPage />} />

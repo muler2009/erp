@@ -286,6 +286,7 @@ urlpatterns = [
     path("api/v1/sales/contracts/<uuid:pk>/history", svp.ContractHistory.as_view()),
     path("api/v1/sales/contracts/<uuid:pk>/<str:action>", svp.ContractAction.as_view()),
     path("api/v1/sales/obligations/<uuid:pk>/done", svp.ObligationDone.as_view()),
+    path("api/v1/sales/deliveries", svo.Deliveries.as_view()),
     path("api/v1/sales/deliveries/performance", svo.DeliveryPerformance.as_view()),
     path("api/v1/sales/deliveries/<uuid:pk>", svo.DeliveryDetail.as_view()),
     path("api/v1/sales/deliveries/<uuid:pk>/confirm", svo.DeliveryConfirm.as_view()),

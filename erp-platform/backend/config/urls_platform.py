@@ -20,6 +20,7 @@ urlpatterns = [
     path("api/v1/platform/tenants", p.TenantListCreate.as_view()),
     path("api/v1/platform/tenants/<uuid:tenant_id>", p.TenantDetail.as_view()),
     path("api/v1/platform/tenants/<uuid:tenant_id>/provision", p.TenantRetryProvisioning.as_view()),
+    path("api/v1/platform/tenants/<uuid:tenant_id>/resend-admin-setup", p.TenantResendAdminSetup.as_view()),
     path("api/v1/platform/tenants/<uuid:tenant_id>/lifecycle/<str:action>", p.TenantLifecycle.as_view()),
     path("api/v1/platform/tenants/<uuid:tenant_id>/entitlements", p.TenantEntitlements.as_view()),
     path("api/v1/platform/tenants/<uuid:tenant_id>/access/role-assignments", p.TenantRoleAssignmentsBreakGlass.as_view()),

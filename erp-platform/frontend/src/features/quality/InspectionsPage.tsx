@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { useListQualityInspectionsQuery, useListQualityPlansQuery, useScheduleQualityInspectionMutation } from "../../shared/api/endpoints";
 import { errorMessage } from "../../shared/api/errors";
 import { useAccess } from "../../shared/permissions/usePermissions";
+import { UserSelect } from "../../shared/ui/UserSelect";
 import { Badge, Button, Card, EmptyState, ErrorState, FormField, Modal, PageHeader, Spinner, inputClass } from "../../shared/ui/primitives";
 import { pretty } from "../hr/EmployeeDialogs";
 import { useUserNames, useUserOptions } from "./names";
@@ -70,7 +71,7 @@ export function InspectionsPage() {
         <div className="grid grid-cols-1 gap-x-3 md:grid-cols-2">
           <FormField label="Inspection plan" htmlFor="si-plan"><select id="si-plan" className={inputClass} value={n.plan_id} onChange={(e) => setN({ ...n, plan_id: e.target.value })}><option value="">Choose…</option>{plans.data?.results.map((p) => <option key={p.id} value={p.id}>{p.number} {p.title}</option>)}</select></FormField>
           <FormField label="Scheduled for" htmlFor="si-date"><input id="si-date" type="date" className={inputClass} value={n.scheduled_for} onChange={(e) => setN({ ...n, scheduled_for: e.target.value })} /></FormField>
-          <FormField label="Inspector" htmlFor="si-who"><select id="si-who" className={inputClass} value={n.inspector_id} onChange={(e) => setN({ ...n, inspector_id: e.target.value })}><option value="">Choose…</option>{people.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select></FormField>
+          <FormField label="Inspector" htmlFor="si-who"><UserSelect id="si-who" value={n.inspector_id} onChange={(x) => setN({ ...n, inspector_id: x })} options={people} placeholder="Choose…" /></FormField>
           <FormField label="Lot number" htmlFor="si-lot"><input id="si-lot" className={inputClass} value={n.lot_number} onChange={(e) => setN({ ...n, lot_number: e.target.value })} /></FormField>
           <FormField label="Quantity to inspect from" htmlFor="si-qty"><input id="si-qty" className={inputClass} value={n.quantity_total} onChange={(e) => setN({ ...n, quantity_total: e.target.value })} /></FormField>
         </div>

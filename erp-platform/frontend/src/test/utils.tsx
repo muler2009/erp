@@ -12,7 +12,8 @@ export const me = (permissions: string[]): TenantMe => ({
   user: { id: "u1", email: "a@acme.test", display_name: "Ada" },
   tenant: { id: "t1", name: "Acme", slug: "acme", status: "ACTIVE" },
   modules: ["organization"],
-  permissions,
+  // The real API shape (an object keyed by code), so every test exercises what the backend actually sends.
+  permissions: Object.fromEntries(permissions.map((p) => [p, { tenant_wide: true, scopes: [] }])),
 });
 
 export function renderWithProviders(ui: ReactElement, opts: { permissions?: string[]; route?: string } = {}) {

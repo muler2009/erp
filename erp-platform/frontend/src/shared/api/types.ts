@@ -9,8 +9,11 @@ export interface TenantMe {
   user: { id: string; email: string; display_name: string };
   tenant: { id: string; name: string; slug: string; status: string };
   modules: string[];
-  permissions: string[];
+  /** Keyed by permission code. `tenant_wide` is true when the user holds it everywhere; otherwise `scopes` lists where. */
+  permissions: PermissionMap;
 }
+
+export type PermissionMap = Record<string, { tenant_wide: boolean; scopes: unknown[] }>;
 
 export interface PublicConfig {
   context: "tenant" | "platform";
@@ -183,12 +186,22 @@ export interface ValuationReport { as_of?: string; rows: { sku: string; name: st
 export interface StockAlert { sku: string; name: string; on_hand: string; alert: string; threshold?: string }
 export type MovementInput = { kind: "receive" | "issue" | "transfer" | "adjust"; body: { product: string; location: string; to_location?: string; quantity?: string; unit_cost?: string; counted_quantity?: string; lot_code?: string; reason: string } };
 
-export interface CrmAccount { id: string; name: string; industry: string; segment: string; owner_id: string; is_active: boolean; credit_status: string; lifecycle_stage: string }
+export interface CrmAccount {
+  id: string; name: string; industry: string; segment: string; owner_id: string; is_active: boolean; credit_status: string; lifecycle_stage: string;
+  website?: string; tax_id?: string; customer_type?: string; parent?: string | null; classification?: string; credit_limit?: string | null;
+  restriction_note?: string; preferred_channel?: string; language?: string;
+}
+export interface CrmContact {
+  id: string; account: string | null; first_name: string; last_name: string; email: string; phone: string; job_title: string; role: string; preferred_channel: string;
+  consent: { email: boolean; phone: boolean; sms: boolean; opted_out: boolean };
+}
+export interface CrmAddress { id: string; kind: "BILLING" | "DELIVERY" | "BRANCH"; label: string; line1: string; city: string; region: string; country: string; is_default: boolean }
+export interface TimelineEvent { at: string; kind: string; summary: string; ref: string }
 export type LeadStatus = "NEW" | "CONTACTED" | "QUALIFIED" | "DISQUALIFIED" | "CONVERTED" | "MERGED";
 export interface Lead { id: string; name: string; company: string; email: string; phone: string; status: LeadStatus; source: string; owner_id: string | null; converted_opportunity: string | null; potential_value: string | null; currency: string; follow_up_date: string | null }
 export interface PipelineStage { code: string; name: string; probability: number; is_won: boolean; is_lost: boolean }
 export interface Opportunity { id: string; name: string; account: string; stage: string; probability: number; amount: string; currency: string; status: "OPEN" | "WON" | "LOST"; expected_close: string | null; owner_id: string; lost_reason: string; next_action: string; next_action_date: string | null }
-export interface SalesLine { id: string; line_no: number; product: string | null; description: string; quantity: string; unit_price: string; discount_percent: string; net_unit_price: string; line_total: string; tax_amount: string; delivered_quantity?: string; invoiced_quantity?: string }
+export interface SalesLine { id: string; line_no: number; product: string | null; description: string; quantity: string; unit_price: string; discount_percent: string; net_unit_price: string; line_total: string; tax_amount: string; delivered_quantity?: string; returned_quantity?: string; invoiced_quantity?: string }
 export interface Quotation { id: string; number: string; account: string; currency: string; status: string; valid_until: string | null; subtotal: string; tax_total: string; total: string; version: number; lines?: SalesLine[] }
 export interface SalesOrder { id: string; number: string; account: string; currency: string; order_date: string; status: string; subtotal: string; tax_total: string; total: string; approval_required: boolean; workflow_instance_id: string | null; version: number; hold_reason: string; lines?: SalesLine[] }
 
@@ -412,3 +425,197 @@ export interface QResult { id: string; parameter_id: string; parameter: string; 
 export interface QInspectionDetail extends QInspection { results: QResult[]; defects: { id: string; defect_code: string; quantity: string; note: string }[]; equipment: { id: string; tag: string }[]; evidence: QEvidence[]; history: QHistory[]; ncr_ids: string[]; holds: string[] }
 export interface QHold { id: string; number: string; product_id: string; lot_number: string; quantity: string; reason: string; source_type: string; source_id: string | null; status: string; placed_by: string; released_by: string | null; released_at: string | null; disposition: string; disposition_note: string; reinspection_id: string | null; created_at: string }
 export interface QHoldDetail extends QHold { history: QHistory[] }
+
+export interface QAudit { id: string; number: string; program: string; audit_type: string; title: string; status: string; planned_start: string; planned_end: string; lead_auditor_id: string; auditee_department_id: string | null; supplier_id: string | null; follow_up_of: string | null; findings_open: number; findings_total: number }
+export interface QChecklistItem { id: string; position: number; question: string; response: string; note: string; requirement_id: string | null; procedure_document_id: string | null }
+export interface QFinding { id: string; number: string; audit_id: string; finding_type: string; severity: string; description: string; requirement_ref: string; checklist_item_id: string | null; status: string; due_date: string | null; owner_id: string | null; capa_id: string | null; closure_note: string; actions: QAction[] }
+export interface QAuditDetail extends QAudit { scope: string; objectives: string; criteria: string; summary: string; team: { user_id: string; role: string }[]; checklist: QChecklistItem[]; findings: QFinding[]; evidence: QEvidence[]; history: QHistory[] }
+export interface QChecklistTemplate { id: string; name: string; audit_type: string; questions: { question: string; requirement?: string }[]; is_active: boolean }
+
+export interface QSupplierCert { id: string; supplier_id: string; name: string; number: string; issuer: string; issued_on: string | null; expires_on: string | null; expired: boolean; document_id: string | null }
+export interface QSupplierEval { id: string; supplier_id: string; period_from: string; period_to: string; lots_inspected: number; lots_rejected: number; quantity_inspected: string; quantity_rejected: string; ncr_count: number; scar_open: number; rejection_rate: string; score: string; outcome: string }
+export interface QSupplierProfile { supplier_id: string; status: string; status_reason: string; min_score: string; max_rejection_rate: string; criteria_note: string; certificates: QSupplierCert[]; latest_evaluation: QSupplierEval | null; open_scars: number }
+export interface QScar { id: string; number: string; supplier_id: string; ncr_id: string | null; description: string; due_date: string; status: string; response: string; review_note: string; owner_id: string; overdue: boolean; history: QHistory[] }
+
+export interface QComplaint { id: string; number: string; complaint_type: string; severity: string; status: string; customer_id: string | null; customer_name: string; product_id: string | null; sales_order_id: string | null; lot_number: string; received_on: string; investigator_id: string; capa_id: string | null; is_recurring: boolean; responded_on: string | null }
+export interface QComplaintDetail extends QComplaint { description: string; channel: string; findings: string; response_text: string; resolution: string; customer_confirmed_on: string | null; evidence: QEvidence[]; costs: QCost[]; actions: QAction[]; history: QHistory[] }
+
+export interface QRisk { id: string; number: string; title: string; area: string; category: string; likelihood: number; impact: number; score: number; level: string; residual_score: number | null; residual_level: string | null; owner_id: string; status: string; next_review_on: string | null; product_id: string | null; supplier_id: string | null; project_id: string | null }
+export interface QRiskDetail extends QRisk { causes: string; consequences: string; links: unknown[]; actions: QAction[]; history: QHistory[] }
+export interface QSuggestion { id: string; number: string; title: string; description: string; category: string; status: string; submitted_by: string; decision_note: string }
+export interface QInitiative { id: string; number: string; title: string; status: string; owner_id: string; target_date: string; progress: number; suggestion_id: string | null; objective_id: string | null; metric: string; baseline_value: string | null; target_value: string | null; result_value: string | null }
+export interface QInitiativeDetail extends QInitiative { description: string; lessons_learned: string; capa_id: string | null; actions: QAction[]; history: QHistory[] }
+
+export interface QImpact { id: string; inspection_id: string; status: string; note: string }
+export interface QCalibration { id: string; equipment_id: string; status: string; scheduled_for: string; performed_on: string | null; performed_by: string; result: string; as_found: string; certificate_ref: string; out_of_tolerance: boolean; impacts: QImpact[] }
+export interface QEquipment { id: string; tag: string; name: string; status: string; responsible_id: string; interval_days: number; last_calibrated_on: string | null; next_due_on: string | null; overdue: boolean; location: string; hold_reason: string; asset_id: string | null }
+export interface QEquipmentDetail extends QEquipment { manufacturer: string; model: string; serial_number: string; calibrations: QCalibration[]; history: QHistory[] }
+
+export interface QPunch { id: string; number: string; project_id: string; location: string; description: string; severity: string; status: string; assigned_to: string | null; contractor: string; due_date: string | null; request_id: string | null; fixed_note: string }
+export interface QRequest { id: string; number: string; project_id: string; kind: string; status: string; hold_point: boolean; location: string; contractor: string; requested_for: string; activity_task_id: string | null; plan_id: string | null; inspection_id: string | null; drawing_document_id: string | null; decision_note: string }
+export interface QRequestDetail extends QRequest { punch_items: QPunch[]; history: QHistory[]; evidence: QEvidence[] }
+
+export interface QObjective { id: string; plan_id: string; name: string; metric: string; target: string; direction: string; unit: string; owner_id: string; latest_value: string | null; latest_period: string | null; met: boolean | null }
+export interface QControlPoint { id: string; name: string; stage: string; frequency: string; acceptance_criteria: string; responsible_id: string; inspection_plan_id: string | null }
+export interface QMasterPlan { id: string; number: string; title: string; scope_type: string; scope_ref: string; scope_label: string; status: string; revision: number; owner_id: string; department_id: string | null; valid_from: string | null; valid_to: string | null; approved_at: string | null }
+export interface QMasterPlanDetail extends QMasterPlan { standards: string; objectives: QObjective[]; control_points: QControlPoint[]; revisions: { revision: number; reason: string; changed_by: string; at: string }[]; history: QHistory[] }
+export interface QStandard { id: string; code: string; name: string; kind: string; issuer: string; version: string; status: string; effective_from: string | null }
+export interface QRequirement { id: string; standard_id: string; clause: string; text: string; status: string; owner_id: string; department_id: string | null; next_review_on: string | null; needs_review: boolean; documents: string[]; last_gap: string }
+export interface QStandardDetail extends QStandard { requirements: QRequirement[]; changes: { from_version: string; to_version: string; summary: string; effective_on: string | null; impact: string }[] }
+export interface QCompliance { counts: Record<string, number>; total: number; compliance_percent: number | null; gaps: QRequirement[]; due_for_review: number }
+
+export interface QReportInfo { code: string; title: string }
+export interface QReportResult { code: string; title: string; rows: Record<string, unknown>[]; count: number }
+
+export type OrgKind = "departments" | "teams" | "positions" | "business-units" | "cost-centers" | "branches" | "legal-entities";
+/** One row of any structural resource; which fields are present depends on the kind. */
+export interface OrgRecord {
+  id: string;
+  code: string;
+  name?: string;
+  title?: string;
+  is_active: boolean;
+  version: number;
+  parent?: string | null;
+  business_unit?: string | null;
+  branch?: string | null;
+  department?: string | null;
+  legal_entity?: string | null;
+  head_user_id?: string | null;
+  lead_user_id?: string | null;
+  manager_user_id?: string | null;
+  description?: string;
+  address?: string;
+  registration_number?: string;
+  tax_id?: string;
+  country?: string;
+  currency?: string | null;
+}
+export interface Company {
+  id: string;
+  legal_name: string;
+  trade_name: string;
+  registration_number: string;
+  tax_id: string;
+  country: string;
+  address: string;
+  phone: string;
+  email: string;
+  base_currency: string | null;
+  fiscal_year_start_month: number;
+  work_days: number[];
+  version: number;
+}
+
+export interface Currency { id: string; code: string; name: string; symbol: string; decimals: number; is_active: boolean }
+export interface ExchangeRate { id: string; currency: string; currency_code: string; rate_date: string; rate: string; source: string }
+export interface FiscalPeriod { id: string; number: number; name: string; start_date: string; end_date: string; status: "OPEN" | "CLOSED"; closed_at: string | null; closed_by: string | null; version: number }
+export interface FiscalYear { id: string; name: string; start_date: string; end_date: string; periods: FiscalPeriod[] }
+export interface Holiday { id: string; holiday_date: string; name: string; branch: string | null }
+export interface NumberSequence { id: string; code: string; name: string; template: string; reset_policy: "NEVER" | "YEARLY" | "MONTHLY"; next_value: number; period_key: string; is_active: boolean; preview?: string }
+export interface MemberProfile {
+  user_id: string;
+  email: string;
+  display_name: string;
+  profile: { department: string | null; team: string | null; position: string | null; business_unit: string | null; cost_center: string | null; manager_user_id: string | null } | null;
+}
+
+export interface CrmActivity { id: string; type: string; subject: string; due_at: string | null; done_at: string | null; owner_id: string; lead: string | null; opportunity: string | null; account: string | null; priority: "LOW" | "MEDIUM" | "HIGH"; assignee_id: string | null; outcome: string; notes: string }
+export interface OpportunityDetail extends Opportunity { contact: string | null; lost_reason: string; competitors: string; requirements: string; decision_makers: string; risks: string; last_activity_at: string | null }
+export interface StageChange { from: string; to: string; at: string; actor: string | null; note: string }
+export interface OppLine { product: string; sku: string; quantity: string; expected_price: string }
+export interface ForecastRow { month?: string; group?: string; currency: string; count: number; amount: string; weighted: string }
+export interface ConversionReport { leads: Record<string, number>; lead_to_opportunity_rate: number | null; won: number; lost: number; win_rate: number | null }
+
+export interface Campaign { id: string; number: string; name: string; objective: string; channel: string; audience: Record<string, string>; budget: string; currency: string; start_date: string; end_date: string; status: "DRAFT" | "ACTIVE" | "COMPLETED" | "CANCELLED"; owner_id: string }
+export interface CampaignMember { id: string; contact: string | null; lead: string | null; status: "TARGETED" | "SENT" | "RESPONDED" | "EXCLUDED"; excluded_reason: string }
+export interface CampaignReport {
+  campaign: string; status: string; currency: string; members: Record<string, number>; excluded: number; response_rate: string | null; leads_generated: number; leads_converted: number;
+  budget: string; spent: string; remaining: string; opportunities: number; open_pipeline: string; won_revenue: string; roi_percent: string | null; cost_per_lead: string | null;
+}
+
+export type CaseStatus = "NEW" | "OPEN" | "PENDING_CUSTOMER" | "RESOLVED" | "CLOSED" | "CANCELLED";
+export interface ServiceCase {
+  id: string; number: string; subject: string; description: string; kind: "INQUIRY" | "COMPLAINT" | "REQUEST"; category: string; priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT"; severity: "MINOR" | "MAJOR" | "CRITICAL";
+  status: CaseStatus; account: string; contact: string | null; owner_id: string | null; team: string; first_response_due: string | null; due_at: string | null; first_responded_at: string | null; resolved_at: string | null;
+  resolution: string; escalation_level: number; satisfaction: number | null; feedback: string; sla: { response_breached: boolean; resolution_breached: boolean };
+}
+export interface CaseComment { id: string; author: string; text: string; internal: boolean; at: string }
+export interface CaseFile { id: string; name: string; size: number; content_type: string }
+export interface SlaPolicyRow { priority: string; first_response_hours: number; resolution_hours: number }
+export interface ServiceReportData { total: number; open: number; complaints: number; avg_resolution_hours: number | null; sla_met_percent: number | null; avg_satisfaction: number | null; escalated: number; by_category: Record<string, number>; by_month: Record<string, number>; by_owner: Record<string, { handled: number; resolved: number }> }
+
+export interface TeamNode { id: string; name: string; manager_id: string | null; members: { user_id: string; is_lead: boolean }[]; children: TeamNode[] }
+export interface Territory { id: string; name: string; team: string; criteria: { country?: string[]; industry?: string[]; segment?: string[] }; priority: number; is_active: boolean }
+export interface PortfolioRow { owner_id: string; accounts: number; open_opportunities: number; open_value: Record<string, string> }
+export interface CrmDashboard {
+  lead_sources: Record<string, { leads: number; converted: number; conversion_percent: number }>;
+  pipeline: { open_count: number; open_value_by_currency: Record<string, string> };
+  won: number; lost: number;
+  neglected_opportunities: { id: string; name: string; owner_id: string; last_activity_at: string | null; amount: string }[];
+  activity_performance: { owner_id: string; activities: number; completed: number; completion_percent: number }[];
+  overdue_activities: number;
+  customers: { active: number; at_risk: number; churned: number; churn_rate_percent: number };
+}
+export interface TierRow { account: string; name: string; revenue: string }
+export interface CrmSegmentation { currency: string; total_revenue: string; tiers: Record<"A" | "B" | "C" | "N", TierRow[]>; by_segment: Record<string, string>; by_industry: Record<string, string> }
+export interface RetentionRow { account: string; name: string; last_order: string; days_idle: number; lifetime_value: string }
+export interface CrmRetention { active: RetentionRow[]; at_risk: RetentionRow[]; churned: RetentionRow[]; never_purchased: number; churn_rate_percent: number }
+export interface CrmSatisfaction { responses: number; average: number | null; distribution: Record<string, number>; promoter_percent: number; detractor_percent: number; lowest_accounts: { account: string; name: string; average: number | null; responses: number }[] }
+export interface ProfitRow { account: string; name: string; revenue: string; cost: string; margin: string; margin_percent: number }
+
+export interface PriceListItemRow { product: string; min_quantity: string; unit_price: string }
+export interface PriceListRow { id: string; name: string; kind: "STANDARD" | "PROMOTIONAL" | "CUSTOMER" | "CONTRACT"; account: string | null; currency: string; valid_from: string | null; valid_to: string | null; is_active: boolean; items: PriceListItemRow[] }
+export interface CatalogItem { id: string; sku: string; name: string; category: string; uom: string; sellable: boolean; discontinued: boolean; min_price: string | null; max_discount_percent: string | null; available: string | null; is_bundle: boolean }
+export interface ProductSalesProfile { product: string; is_sellable: boolean; is_discontinued: boolean; description?: string; min_price?: string | null; min_margin_percent?: string | null; max_discount_percent?: string | null; default_tax_rate?: string | null }
+export interface DiscountRuleRow { scope: "CATEGORY" | "CLASSIFICATION"; key: string; max_percent: string; is_active: boolean }
+export interface PriceChangeRow { price_list: string; product: string; min_quantity: string; old_price: string | null; new_price: string; changed_by: string | null; changed_at: string }
+
+export interface DeliveryDiscrepancy { order_line: string; kind: "SHORT" | "DAMAGED" | "WRONG"; quantity: string; note: string; case: string | null }
+export interface Delivery { id: string; number: string; order: string; status: "DISPATCHED" | "DELIVERED" | "FAILED"; delivery_date: string; expected_date: string | null; delivered_at: string | null; carrier: string; tracking_ref: string; received_by: string; pod_note: string; failure_reason: string; lines: { order_line: string; quantity: string; lot_code: string }[]; discrepancies: DeliveryDiscrepancy[] }
+export interface DeliveryPerformance { total: number; by_status: Record<string, number>; on_time_percent: number | null; avg_transit_days: number | null; late_now: number; discrepancies: number; by_carrier: Record<string, { deliveries: number; failed: number }> }
+export interface PodFile { id: string; name: string; size: number }
+
+export type Disposition = "RESTOCK" | "QUARANTINE" | "DISPOSE";
+export interface ReturnRequestRow { id: string; number: string; order: string; status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELLED" | "RECEIVED"; reason: string; reason_code: string; wants_replacement: boolean; requested_by: string; decided_by: string | null; decision_note: string; sales_return: string | null; replacement_order: string | null; lines: { order_line: string; quantity: string; disposition: Disposition }[] }
+export interface ReturnReport { total: number; by_status: Record<string, number>; by_reason: Record<string, number>; received_by_disposition: Record<string, string> }
+
+export interface SalesPerformance { period: [string, string]; orders: number; revenue: string; average_order_value: string; average_discount_percent: number; win_rate_percent: number | null; avg_sales_cycle_days: number | null; quote_to_order_percent: number | null; trend: Record<string, string>; top_customers: { account: string; name: string; revenue: string; share_percent: number }[]; top5_share_percent: number; concentration_hhi: number }
+export interface SalesBacklog { to_deliver: string; to_invoice: string; orders: number; oldest: { order: string; customer: string; age_days: number; to_deliver: string; to_invoice: string }[] }
+export interface SalesForecast { months: number; backlog: string; worst: string; likely: string; best: string; monthly_run_rate: string; run_rate_over_horizon: string; pipeline_by_month: Record<string, { worst: string; likely: string; best: string }> }
+
+export interface DocCategory { id: string; code: string; name: string; doc_type: string; is_controlled: boolean; requires_expiry: boolean; review_interval_days: number | null; retention_years: number | null; is_active: boolean }
+export interface DocFolder { id: string; name: string; parent: string | null; is_active: boolean }
+export interface DocClassification { code: string; name: string; rank: number }
+export interface DocVersion { id: string; number: number; label: string; status: "DRAFT" | "UNDER_REVIEW" | "CHANGES_REQUESTED" | "APPROVED" | "PUBLISHED" | "SUPERSEDED" | "REJECTED" | "WITHDRAWN"; change_reason: string; file_name: string; size: number; created_by: string; created_at: string; submitted_at: string | null; published_at: string | null; rejection_note: string }
+export interface DocRow { id: string; reference: string; title: string; status: string; category: string; category_name: string; classification: string; owner: string; folder: string | null; tags: string[]; current_version: { id: string; label: string; file_name: string; published_at: string | null } | null; effective_date: string | null; expiry_date: string | null; next_review_date: string | null; expired: boolean; review_overdue: boolean; legal_hold: boolean; is_obsolete: boolean; is_template: boolean; pending_revision: { id: string; label: string; status: string } | null; can?: Record<string, boolean> }
+export interface DocDetail extends DocRow { description: string; origin: string; versions: DocVersion[]; links: { id: string; type: string; ref_id: string; label: string }[]; history?: { action: string; from: string | null; to: string | null; by: string | null; note: string; at: string; version: string | null }[]; approvals?: { version: string; action: string; round: number; stage: number; by: string | null; comment: string; at: string }[]; related: { id: string; reference: string; title: string }[] }
+export interface DocComment { id: string; document: string; version: string | null; author: string; comment: string; response: string; status: string; at: string }
+export interface PendingAck { document: string; reference: string; title: string; version: string; due_date: string | null }
+
+export interface CommissionTier { from: string; rate: string }
+export interface CommissionPlanRow { id: string; name: string; tiers: CommissionTier[]; category_rates: Record<string, string>; is_active: boolean }
+export interface CommissionStatementRow { id: string; owner_id: string; plan: string; period_start: string; period_end: string; status: "DRAFT" | "APPROVED" | "TRANSFERRED" | "CANCELLED"; sales_amount: string; returns_amount: string; commission: string; details: Record<string, { net: string; rate?: string; commission: string; tiers?: CommissionTier[] }>; approved_by: string | null; payroll_input: string | null }
+export interface Attainment { owner_id: string; net_sales: string; target: string | null; attainment_percent: number | null; remaining: string | null }
+
+export interface Backorder { order: string; order_id: string; line: string; product: string; backordered: string; ordered: string; since: string }
+export interface ReceivablesAging { as_of: string; currency: string; customers: ({ account: string; customer: string; total: string } & Record<string, string>)[]; totals: Record<string, string>; total: string }
+export interface SalesContractRow { id: string; number: string; account: string; title: string; status: "DRAFT" | "ACTIVE" | "EXPIRED" | "TERMINATED"; start_date: string; end_date: string; currency: string; committed_value: string | null; auto_renew: boolean; renewal_term_months: number | null; renewal_notice_days: number | null; payment_terms: string; delivery_terms: string; terms: string; version: number; renews: string | null; items?: { product: string; min_quantity: string; unit_price: string }[]; obligations?: { id: string; description: string; due_date: string; party: string; done: boolean }[] }
+export interface ContractUtilisation { contract: string; currency: string; ordered: string; committed: string | null; percent: number | null; remaining: string | null; obligations_open: number; obligations_overdue: number }
+export interface ContractRevision { version: number; event: string; created_at: string }
+
+export interface ProcWorkQueue { open_requisitions: number; orders_awaiting_approval: number; overdue_delivery_lines: number; pending_inspections: number; match_exceptions: number; contracts_expiring_60d: number; open_claims: number; returns_awaiting_credit: number; supplier_documents_expiring_30d: number }
+export interface OverdueLine { po: string; supplier: string; line: number; open_quantity: string; due_date: string; days_late: number }
+export interface SupplierPerf { supplier: string; orders: number; receipt_lines: number; on_time_pct: string | null; rejection_pct: string | null; defect_pct: string | null; claims: number; claimed: string }
+export interface SpendRow { key: string; currency: string; orders: number; ordered: string }
+export interface CycleTimes { requisition_to_po_days: string | null; po_to_receipt_days: string | null; samples: { requisition_to_po: number; po_to_receipt: number } }
+export interface PriceVarianceRow { po: string; line: number; estimated: string; actual: string; variance_pct: string | null }
+
+export interface PendingInspection { line: string; receipt: string; po: string; product: string; quantity: string; open: string; quarantine: string }
+export interface GoodsReceiptRow { id: string; number: string; po: string; kind: string; receipt_date: string; delivery_note: string; notes: string; lines: { id: string; po_line: string; quantity: string; over_quantity: string; inspection_status: string; accepted: string; rejected: string; lot_code: string }[] }
+
+export interface SupplierReturnRow { id: string; number: string; po: string; supplier: string; status: "DRAFT" | "APPROVED" | "DISPATCHED" | "CREDITED" | "CLOSED" | "CANCELLED"; reason: string; return_date: string; return_value: string; credit_due: string; credit_note_id: string | null; lines: { po_line: string; quantity: string; lot_code: string }[] }
+export interface SupplierClaimRow { id: string; number: string; supplier: string; kind: string; status: "OPEN" | "SUBMITTED" | "ACCEPTED" | "REJECTED" | "SETTLED"; currency: string; amount_claimed: string; amount_accepted: string | null; description: string; decision_note: string }
+
+export interface PurchaseContractRow { id: string; number: string; title: string; supplier: { id: string; name: string }; status: "DRAFT" | "ACTIVE" | "EXPIRED" | "TERMINATED"; start_date: string; end_date: string; currency: string; value_limit: string | null }
+export interface PurchaseContractReport { number: string; supplier: string; status: string; start_date: string; end_date: string; currency: string; value_limit: string | null; consumed: string; remaining: string | null; days_left: number; prices: { product: string; unit_price: string }[] }

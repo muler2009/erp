@@ -396,3 +396,367 @@ Not done: punch import from devices (`hr/attendance/import`), per-employee daily
 **Tested**: 18 new tests (validators; plan, parameter, schedule, result, correction, completion gates; hold placement; disposition and release gates; separation-of-duties refusal; permission gating). Full suite 428 passed, `tsc -b` clean, build OK, `npm audit` 0 vulnerabilities. No backend changes.
 
 **Not done**: equipment selection when starting an inspection (needs the equipment pages), inspection evidence is shown and uploadable but not tested beyond the shared panel, the place-hold UI does not know the signed-in user so separation of duties is shown from the server's refusal. Audits, supplier quality, complaints, risks, equipment, project QA, plans and standards, reports and config admin remain. Not run in a real browser against Keycloak and the backend.
+
+## F41 — Quality: audits, findings, checklist templates
+
+**Implemented**
+- `/app/quality/audits` and `/:id`: list by status and type; schedule (type, title, scope, dates, lead auditor, team, area audited, checklist template; end before start rejected); start; answer each checklist question (a note is required for non-conforming and observation answers); add questions; raise findings (type, severity, requirement, linked question, owner, due date); report (pre-checks unanswered questions, summary, and non-conforming answers with no finding); close (pre-checks open findings); cancel (planned only).
+- `/app/quality/findings` and `/:id`: list by status, severity and overdue; assign owner and due date; raise a CAPA (owner and reviewer must differ); verify and close (a non-conformity needs a corrective action or CAPA first, and every action verified; the server also checks the linked CAPA is closed); actions panel.
+- `/app/quality/checklist-templates`: list and create (one question per line, optional `STANDARD:clause | question`).
+- Backend: finding payload now includes `checklist_item_id` so the UI can tell which non-conformances already have a finding; assertion added to `test_audit_findings_stay_open_until_actioned_and_audit_closes_last` (passes).
+
+**Tested**: 16 new frontend tests. Full suite 444 passed, `tsc -b` clean, build OK, `npm audit` 0 vulnerabilities.
+
+**Known flake** (resolved in F44): `shared/auth/AuthProvider.test.tsx` failed in loaded full runs with "Authentication is not initialised". See F44 for the cause and fix.
+
+**Not done**: supplier quality, complaints, risks, equipment and calibration, project QA, plans and standards, reports, config admin. The auditor-cannot-audit-own-area rule (`auditee_user_ids`) is enforced by the server only; the UI has no field for it. Not run in a real browser against Keycloak and the backend.
+
+## F42 — Quality: supplier quality and corrective action requests (SCARs)
+
+**Implemented**
+- `/app/quality/suppliers`: supplier list linking to each supplier's quality page.
+- `/app/quality/suppliers/:id`: status badge with criteria (minimum score, maximum rejection rate), change status (reason required; approving is refused client-side while requests are open, and the server enforces it), certificates (add, expired flag, expiry before issue rejected), evaluation history and "Evaluate performance" for a date range with an option to move an approved supplier to conditional when below criteria, the supplier's corrective action requests. The score formula is shown on the page.
+- `/app/quality/scars` and `/:id`: list by status with overdue flag; raise a request (supplier, description, due date, follow-up person, optional related NCR); record the supplier's response; accept or reject it with a note; close an accepted one.
+- New API hooks for profile, status, certificates, evaluations and SCARs. No backend changes.
+
+**Tested**: 13 new tests (validators; list; expired certificate and evaluation display; viewer gating; approve-blocked-by-open-requests; status change payload; certificate date rule; evaluation payload; raising a request; response, review and close flows; server refusal). Full suite 457 passed, `tsc -b` clean, build OK, `npm audit` 0 vulnerabilities.
+
+**Not done**: the supplier list shows only the procurement status, not each supplier's quality status (that would need one profile call per row, or a backend list field); certificate document attachment (the backend takes a document id, the UI has no picker); a status history on the supplier page (the backend does not return it). Complaints, risks, equipment and calibration, project QA, plans and standards, reports and config admin remain. Not run in a real browser against Keycloak and the backend.
+
+## F43 — Quality: customer complaints
+
+**Implemented**
+- `/app/quality/complaints`: list by status and severity with a recurring flag; register a complaint (customer name, type, severity, investigator, optional product, lot and channel, description).
+- `/app/quality/complaints/:id`: record findings, raise a non-conformance (category), raise a CAPA (owner and reviewer must differ), respond to the customer (response and resolution), close (customer confirmation date or a note; a severity that requires a CAPA is blocked until one is linked, with a notice on the page). Actions, evidence, costs and history panels; link to the linked CAPA.
+- New API hooks for complaints. No backend changes.
+
+**Tested**: 10 new tests (validators, list and recurring flag, registering, findings, responding gate by status, respond payload, critical-severity close block, close confirmation rule, CAPA owner and reviewer rule, viewer gating). Full suite 467 passed, `tsc -b` clean, build OK, `npm audit` 0 vulnerabilities.
+
+**Not done**: the customer is a free-text name (the backend also accepts a customer id, but the UI has no customer picker); sales order and delivery links are not offered; a complaint cannot be linked to an existing CAPA from the UI, only a new one raised. Risks, improvement, equipment and calibration, project QA, plans and standards, reports and config admin remain. Not run in a real browser against Keycloak and the backend.
+
+## F44 — Quality: risks and continuous improvement; auth test flake fixed
+
+**Implemented**
+- `/app/quality/risks`: 5×5 risk matrix of open risks (cells coloured by level and labelled with the count for screen readers), list filtered by status and level (plain array from the backend, not paginated), register a risk (likelihood and impact must be whole numbers 1–5; the score and level are shown as you type).
+- `/app/quality/risks/:id`: reassess, record residual risk, start mitigation (needs an open or done mitigation action), accept (a high risk, score 15 or more, cannot be accepted; a reason is required), close (every action verified and a residual recorded). Actions and history panels.
+- `/app/quality/improvement`: suggestions (anyone with report rights can make one; managers accept or decline with a reason) and initiatives (start one, optionally from an accepted suggestion, with measure, baseline and target).
+- `/app/quality/initiatives/:id`: approve (the server refuses the creator), start work with progress, complete (numeric result and lessons learned, every action verified), cancel with a reason.
+- New API hooks for risks, suggestions and initiatives. No backend changes.
+
+**Auth test flake: cause and fix.** `AuthProvider` registers its session-lost handler in a `useEffect` after the render commits. Two tests ("renders children when a session exists" and "completes the callback once…") finished as soon as the status showed "authenticated", so on a busy machine that effect could run after `afterEach` had restored the real `onSessionLost`, which throws "Authentication is not initialised". I reproduced it by running the file under CPU load (it failed about one run in four), and the diagnosis fits which tests failed. Both tests now wait for the handler to be registered. 8 of 8 loaded runs pass afterwards. This is a test-only change; the application code is unchanged. It is evidence, not proof, since the failure is timing dependent.
+
+**Tested**: 14 new tests (validators incl. the risk status rules and initiative completion rules; matrix and list; register with live score; high-risk acceptance refused; residual flag; close gating; suggestion submit and decide; initiative creation from a suggestion; separation-of-duties refusal; numeric result). Full suite 481 passed, `tsc -b` clean, build OK, `npm audit` 0 vulnerabilities.
+
+**Not done**: risk area is free text (the backend does not define a list); risk links to products, suppliers and projects are not offered; objectives (planning) and initiative-to-objective links, equipment and calibration, project QA, plans and standards, reports and config admin remain. Not run in a real browser against Keycloak and the backend.
+
+## F45 — Quality: equipment and calibration
+
+**Implemented**
+- `/app/quality/equipment` (register, status and overdue filters, paginated) and `/app/quality/equipment/:id`.
+- Detail page: calibration history; schedule a calibration (hidden while one is pending); record the result as multipart with an optional certificate file; impact assessment per affected inspection (affected yes/no, note required); return to service; retire with a reason.
+- Mirrored server rules (the server stays the authority): tag, positive interval and no future dates on registration; on recording, who/certificate/date are required, and FAIL needs the as-found condition; return to service is blocked until a passing in-tolerance calibration exists and no impact on the last failed calibration is pending.
+- Actions need `quality.calibration.manage`; viewing needs `quality.view`. Retired equipment offers no actions.
+- API: 8 endpoints and types (`QEquipment`, `QEquipmentDetail`, `QCalibration`).
+
+**Tested (executed):** `tsc -b` clean; 492 frontend tests pass across 52 files (11 new in `equipment.test.tsx`); build OK; `npm audit` 0 vulnerabilities.
+Note: the test transport drops a multipart file's name, so the test asserts the file part's size; the page passes the name explicitly.
+
+**Not done:** not run in a real browser against Keycloak and the backend; no equipment picker when starting an inspection yet (`start` accepts `equipment_ids`); the asset link is not shown; certificate files are visible only through the evidence record, not listed on this page; the bundle is still about 550 kB.
+
+## F46 — Quality: project QA (inspection requests and punch items)
+
+**Implemented**
+- `/app/quality/inspection-requests` (filters by project, status and hold points only; request dialog with kind, date, location, contractor, activity and hold-point flag), `/app/quality/inspection-requests/:id` and `/app/quality/punch-list`.
+- Request detail: schedule (inspector, and an ITP when the request names none), approve or reject the work with a decision note, cancel with a reason, punch items for that request, evidence upload and history.
+- Punch items: raise (against the request's project from a request, or any project from the list), mark fixed with a note, verify (accept, or reopen with a note).
+- Mirrored rules (the server stays the authority): a hold point needs an activity; a punch item needs a description and severity; approval is blocked while a MAJOR punch item is not closed. Server refusals (inspection not passed, separation of duties on hold points and on verifying one's own fix) are shown from the error envelope.
+- Writes need `quality.project.manage`; viewing needs `quality.view`.
+- API: 10 endpoints and types (`QRequest`, `QRequestDetail`, `QPunch`).
+
+**Tested (executed):** `tsc -b` clean; 506 frontend tests pass across 53 files (14 new in `projectqa.test.tsx`); build OK; `npm audit` 0 vulnerabilities.
+
+**Not done:** not run in a real browser against Keycloak and the backend; the project and task pickers read only the first page of projects; the drawing document is not selectable; the inspection result is not shown on the request page, so approving a failed inspection is refused by the server only; the signed-in user id is unavailable, so separation-of-duties is enforced server-side only; bundle about 550 kB.
+
+## F47 — Quality: plans, objectives, standards and compliance
+
+**Implemented**
+- Quality plans (`/app/quality/plans`, `/:id`): list with status and scope filters, create; detail with objectives (target, direction, latest measurement, met or not met), control points, earlier revisions and history. Draft plans take objectives and control points; submit for approval, resubmit when the last approval event is "changes requested", start a revision of an approved plan with a reason; measurements are recorded only on approved plans.
+- Standards (`/app/quality/standards`, `/:id`): list and add; detail with requirements (clause, owner, status, next review, re-assess flag), add requirement, assess (a gap is needed for partial or non-compliant, an explanation for not applicable), record a new version (flags requirements for re-assessment) and version history.
+- Compliance summary (`/app/quality/compliance`): percent compliant, counts by status, open gaps, due-for-review count, filter by standard.
+- Mirrored rules (the server stays the authority): plan needs an objective or control point before submit; numeric target and measurement; date order; duplicate clause; same-version refusal. Writes need `quality.plan.manage` or `quality.standards.manage`; viewing needs `quality.view`.
+- API: 14 endpoints and types.
+
+**Tested (executed):** `tsc -b` clean; 523 frontend tests pass across 54 files (17 new in `standards.test.tsx`); build OK; `npm audit` 0 vulnerabilities.
+
+**Not done:** not run in a real browser against Keycloak and the backend; mapping documents to requirements and attaching an evidence document to an assessment need a document picker (documents module not built in the frontend yet); a draft plan's header fields cannot be edited after creation; plan department and control-point inspection-plan links are not selectable; the objective-to-initiative link (improvement) is still absent; bundle about 550 kB.
+
+## F48 — Quality: reports and CSV export
+
+**Implemented**
+- `/app/quality/reports` (nav and server permission `quality.analytics.view`): choose any registered report (the list comes from the server, so new reports appear without a frontend change), optional from/to dates, results table whose columns come from the report's own keys (booleans as Yes/No, empty as a dash), first 500 rows shown with a note to export for the rest.
+- Export CSV: `shared/lib/csvDownload.ts` fetches the export with the bearer token and the same date range, saves it as `quality-<code>.csv`, and shows the server's message if refused. The server neutralises spreadsheet formulas in the CSV.
+- A date range with the end before the start is refused before any request is sent (found by a test: the page first also showed a generic error, now fixed).
+- API: report list and run endpoints and types.
+
+**Tested (executed):** `tsc -b` clean; 532 frontend tests pass across 56 files (9 new: `reports.test.tsx` 6, `csvDownload.test.ts` 3); build OK; `npm audit` 0 vulnerabilities.
+
+**Not done:** not run in a real browser against Keycloak and the backend (the real file save is covered only with stubbed browser APIs); only the date range is offered as a filter (the server also supports severity, status, category and similar on some reports); no charts; the route itself is not permission-guarded (the server refuses without the permission and the page shows that); bundle about 550 kB.
+
+## F49 — Quality: lists administration (closes the quality module screens)
+
+**Implemented**
+- `/app/quality/settings` (nav and server permission `quality.admin`): pick one of nine lists (severity levels, non-conformance categories, defect types, root-cause methods, audit types, finding types, complaint types, risk categories, improvement categories), see entries by rank with retired ones marked, add, edit (code locked) and retire or restore. Severity entries also carry a rank and whether a closed record needs a CAPA; other lists show only code and name.
+- Retiring keeps the entry for records that already use it (the server only offers active entries on new forms).
+- Mirrored rules (the server stays the authority): code letters, digits and underscores up to 30 and unique within the list; name up to 120; rank a whole number 1 to 32767. Server refusals show on the page.
+- API: one save endpoint (the list endpoint already existed).
+
+**Tested (executed):** `tsc -b` clean; 538 frontend tests pass across 57 files (6 new in `settings.test.tsx`); build OK; `npm audit` 0 vulnerabilities.
+
+**Not done:** not run in a real browser against Keycloak and the backend; the server upserts by code, so the UI cannot rename a code (a new code is a new entry); no reordering control beyond editing the rank; the existing forms still read these lists through their own queries, with no live refresh across open tabs; bundle about 550 kB.
+
+**Quality module screen coverage:** dashboard, NCRs, CAPA, my actions, inspection plans, inspections, holds, audits, findings, checklist templates, supplier quality, SCARs, complaints, risks, improvement, equipment, project QA, plans, standards, compliance, reports and lists. Remaining gaps are listed per slice above (document pickers, equipment picker when starting an inspection, real-browser run).
+
+## F50 — First real-browser pass (real Keycloak, real backend, real Chromium)
+
+Run on 2026-11-15 without Docker: Keycloak 26 from the release tarball, the Django backend with a tenant provisioned through the real Keycloak admin client, the Vite dev server, and headless Chromium. Repeatable with `docs/operations/e2e-local.md` and `infrastructure/e2e/`.
+
+**What worked first time:** the authorization-code flow with PKCE (redirect to Keycloak, login, callback, token in memory), tenant routing by host, `/api/v1/public/config`, the Vite proxy, tenant provisioning (schema, migrations, seed data, redirect-URI registration, admin account creation and linking), adding a quality list entry, running a quality report, and a real CSV download.
+
+**Real defects found (all fixed):**
+1. **App crashed right after sign-in.** The tenant `/me` returns `permissions` as an object keyed by code (`{tenant_wide, scopes}`); the frontend, its types and every mocked test assumed a string array. Fixed in `AccessProvider` (reads both the tenant object and the platform list; a scoped-only permission still shows the page, a code with no reach does not). The test helper now builds the real shape, so the whole suite exercises what the backend sends.
+2. **Provisioning could never work against a real Keycloak.** `erp-realm.json` gave the `erp-identity-admin` service account no realm-management roles, so every admin call returned 403. Added the service-account user with only manage/view users and clients (verified by importing into a throwaway realm).
+3. **A Keycloak mail failure blocked tenant activation** (the set-up email was inside a required step, and a retried job could not resend it). Moved to its own non-required step (`send_setup_email`): the tenant activates, the job finishes with warnings, and a new platform action `POST /api/v1/platform/tenants/<id>/resend-admin-setup` (permission `platform.tenants.provision`, audited) repeats it. Jobs created before the step existed gain it on resume.
+
+**Smoke walk:** all 95 static tenant routes were loaded against the live backend. No page errors and no failed API calls, except the expected "no employee record" 404s on HR self-service pages (the tenant admin is not an employee): `hr/me`, `hr/me/payslips` on attendance, leave, timesheets and payslips.
+
+**Tested (executed):** frontend `tsc -b` clean; 540 frontend tests pass across 57 files (2 new permission-shape tests); build OK; `npm audit` 0 vulnerabilities. Backend: `tests/test_provisioning.py` and `tests/test_platform_admin.py`, 38 tests pass (4 new: mail failure does not block activation, resend, resend refused for a non-active tenant, resend via the API with audit, and a job gaining the new step).
+
+**Still not done / found but not fixed:**
+- "Responsible"/owner dropdowns on quality dialogs are built from HR employees that have a linked user, so in a new tenant nobody is offered (the admin is a user, not an employee). The proper fix is a search-as-you-type user picker on the existing directory endpoint (`/api/v1/directory/users`, two characters minimum); this touches many dialogs and is the next frontend task.
+- No button in the platform admin UI for "resend administrator set-up email" yet (the API exists).
+- Only the happy paths and page loads were exercised in the browser, not every dialog; the platform-admin console (which needs MFA claims) and sign-out were not driven; one long Chromium session crashed, so the walk runs in batches.
+- Keycloak's own mail was not configured, so the set-up email itself was not received; password was set through the admin API for the test.
+
+## F51 — Find any colleague as an owner/assignee (user picker)
+
+**Problem:** in a new tenant nobody is an HR employee yet, so every owner/inspector/assignee dropdown in the quality screens was empty.
+
+**Implemented**
+- Backend: `GET /api/v1/directory/users?ids=a,b,…` resolves display names for up to 50 ids (400 `invalid_id` / `too_many_ids`); works for any membership of the current tenant, including deactivated colleagues, so old records keep readable names.
+- Frontend: `shared/ui/UserSelect` (employee options + "Find someone else" search, picked person is added and selected); `ActionDialog` field flag `searchUsers`; 15 quality screens switched to it; `useUserNames` falls back from employees → cache → one batched directory lookup (after employees have loaded, to avoid duplicate lookups).
+
+**Tested (executed):** backend `test_directory_resolves_names_for_known_ids_including_deactivated_colleagues` passed; frontend `tsc -b` clean, full vitest 58 files / 546 tests passed, `npm run build` ok, `npm audit` 0 vulnerabilities. New tests: UserSelect (search→pick, min-2-chars, inside dialog), names lookup (batch, fallback), equipment registration with a non-employee owner.
+
+**Not done / not driven in a real browser:** this slice was not re-run against live Keycloak/backend; bundle still ~550 kB.
+
+## F52 — Organization structure and company profile
+
+**Gap closed:** Organization had one read-only Departments list. Backend already offered full CRUD for the rest.
+
+**Implemented**
+- `/app/organization/structure`: tabbed screen for departments, teams, positions, business units, cost centers, branches, legal entities; create and edit (optimistic-locking `version` sent on every edit, conflicts shown), deactivate/reactivate (records are never deleted). Parent/department/unit/branch pickers load the full active list (follows cursors, max 10 pages). Heads/leads/managers use the user picker. A department can't be chosen as its own parent.
+- `/app/organization/company`: company profile (legal/trade name, registration, tax ID, country, address, contact, fiscal-year start month, working days; empty working days shown as Mon–Fri as the backend applies). Read-only without `org.settings.manage`.
+- `/app/organization/departments` redirects to the new screen. Create/edit buttons only with `org.structure.manage` (UX only; backend enforces).
+
+**Tested (executed):** `tsc -b` clean; full vitest 59 files / 552 tests passed (6 new: list + tab switch + view-only, create team with required-field checks and department select, edit with version/deactivate/parent exclusion, version conflict, company save with version and working days, company read-only); build ok; audit 0 vulnerabilities.
+
+**Not done:** legal-entity currency field (needs the currency list — next slice with currencies); base currency on company profile; fiscal years/periods, exchange rates, holidays, numbering sequences, member assignment screens (slice 53); not driven in a real browser.
+
+## F53 — Reference data, numbering and member assignments (completes Organization)
+
+**Implemented**
+- `/app/organization/reference` (permission `org.reference.view`): tabs for currencies (turn on/off, "only in use" filter, server refusals shown), exchange rates (filter by currency, add rate; rate validated positive with ≤8 decimals before the call), fiscal calendar (years with periods, add year, close period with `org.fiscal.close`, reopen with a required reason), holidays (company-wide or per branch).
+- `/app/organization/numbering` (`org.sequences.manage`): list, create (code validated), edit name/template/restart policy/next number/active, with the server's preview of the next number.
+- `/app/organization/members` (`org.structure.view`; assign needs `org.profiles.manage`): active members with department and position; assign department, team, position, business unit, cost center and manager (a member cannot report to themselves).
+- Added the currency field to legal entities and base currency to the company profile (gaps from F52).
+- Buttons shown only with the relevant permission (UX only; backend enforces).
+
+**Tested (executed):** `tsc -b` clean; full vitest 60 files / 562 tests passed (10 new in `reference.test.tsx`, company test extended); build ok; audit 0 vulnerabilities.
+
+**Not done:** tenant settings screen (`/api/v1/settings`, generic key/value), exchange-rate import, fiscal year editing/deleting (backend has none); tabs not driven in a real browser; currency list pages through 50 at a time.
+
+## F54 — CRM accounts and contacts (first of the CRM gap slices)
+
+**Gap:** CRM backend has ~70 endpoints; the UI had only leads and opportunities. Plan: 54 accounts+contacts, 55 activities/opportunity detail/forecast, 56 campaigns, 57 service cases, 58 teams/territories/insights.
+
+**Backend change (tested):** `GET /api/v1/crm/contacts` now accepts `?account=<uuid>` (400 `invalid_id` on junk) and `?q=` (name/email). Test `test_contacts_can_be_filtered_by_account_and_search_and_stay_private_to_the_owner` passed (run alone).
+
+**Implemented**
+- `/app/crm/accounts`: searchable list, create (owner field only for `crm.assign`).
+- `/app/crm/accounts/:id`: profile (edit), credit terms (`crm.assign`; reason required unless OK; limit validated), contacts of the account (add/edit/consent), addresses (add/remove), timeline (activities, opportunities, quotations, orders, deliveries, invoices, cases, changes).
+- `/app/crm/contacts`: search, create, edit, record email consent, opt out and resume. Opt-out is shown clearly; actions only with `crm.manage`.
+- `ActionDialog` gained an `initial` prop for edit forms.
+
+**Tested (executed):** `tsc -b` clean; full vitest 61 files / 572 tests passed (14 new in `crm/accounts.test.tsx`); build ok; audit 0 vulnerabilities. A test race (list reload swallowing a click) was a test timing issue, fixed by waiting for the reload.
+
+**Not done:** phone/SMS consent toggles (email only in UI; API supports all), contact links to other accounts, contact dates/reminders, account hierarchy (parent) editing, territory assignment, lead duplicates/merge/import (backend exists), real-browser run; full backend suite not re-run this slice (only the changed test).
+
+## F55 — CRM activities, opportunity detail and sales reports
+
+**Implemented**
+- `/app/crm/activities`: tabs Upcoming (next 7/14/30 days; "Whole team" only with `crm.view_all`), Follow-ups due, Overdue; schedule an activity (type, subject, due time sent as an absolute UTC time, priority, account, notes); complete with outcome. Actions only with `crm.manage`.
+- `/app/crm/opportunities/:id`: details (edit amount, close date, next action, competitors, requirements, decision makers, risks), products considered (edit list: distinct products, quantity > 0, price ≥ 0), stage history with who/when/note. Read-only once won or lost. Opportunity names in the list link here; list gained "New opportunity".
+- `/app/crm/reports`: pipeline by expected-close month, breakdown by rep/stage/product/month (weighted = amount × stage probability), lead→opportunity and win rates ("–" when there is no data).
+
+**Tested (executed):** `tsc -b` clean; full vitest 62 files / 583 tests passed (11 new in `crm/pipeline.test.tsx`); build ok; audit 0 vulnerabilities. No backend change this slice.
+
+**Not done:** lead edit/duplicate/merge/import screens; owner/assignee reassignment UI (`/crm/<kind>/<id>/assign`); stage configuration (`crm.assign`); activity linking to leads; calendar grid view; real-browser run.
+
+## F56 — CRM campaigns
+
+**Implemented**
+- `/app/crm/campaigns` (`crm.campaign.manage`): list with spend, leads generated and ROI (from the overview endpoint); create with channel, active currency, dates (end ≥ start), budget and audience rules (leads or customer contacts; field/value rules validated, no half-filled or repeated rules).
+- `/app/crm/campaigns/:id`: results (budget, spent, remaining, cost per lead, funnel, response rate, leads, opportunities, pipeline, won revenue, ROI), audience list with status filter and exclusion reasons (no consent / opted out / no address / consent withdrawn), build audience, activate, mark all as sent, complete, cancel, record expense, capture lead (with marketing consent flag), record a response, change budget (`crm.assign` only). Actions offered only while the campaign is draft/active; server refusals (e.g. empty audience) shown verbatim.
+
+**Tested (executed):** `tsc -b` clean; full vitest 63 files / 594 tests passed (11 new in `crm/campaigns.test.tsx`); build ok; audit 0 vulnerabilities. Two older tests were timing-sensitive under load: the currency toggle test (list reload swallowed a click; fixed by waiting for the reload) and `finance/credit.test.tsx` (4 s timeout only when the machine is busy; passes alone and on rerun, not changed).
+
+**Not done:** sending real messages (the system records "sent"; no email/SMS delivery exists), member names beyond the first page of leads/contacts fall back to a short id, per-member removal, campaign editing after creation (no backend endpoint), real-browser run.
+
+## F57 — CRM service cases
+
+**Implemented**
+- `/app/crm/cases`: list with filters (status, priority, overdue only), service-level badge (on track / first response late / resolution target missed / met) and escalation level; open a case (customer, subject, description, type, category, priority, severity).
+- `/app/crm/cases/:id`: case facts and deadlines; actions by state (start, waiting for customer, customer replied, resolve with required resolution, reopen, close, cancel with reason, record customer feedback 1–5 once, assign with user picker — `crm.assign`); conversation with internal notes visibly marked; attachments (uploaded as base64, as the API requires). Closed/cancelled cases take no comments or files. Server refusals shown verbatim.
+- `/app/crm/service-report`: summary (cases, open, complaints, escalated, average resolution hours, resolved on time %, customer rating), by category / month / handler, date range (reversed range not sent), service-level table and editing (`crm.assign`; whole hours, resolution ≥ first response).
+- `ActionDialog` now renders `type: "textarea"` fields.
+
+**Tested (executed):** `tsc -b` clean; full vitest 64 files / 608 tests passed (14 new in `crm/service.test.tsx`); build ok; audit 0 vulnerabilities. No backend change this slice.
+
+**Not done:** linking a case to an order/delivery/invoice/product from the UI (API supports it), contact on a case, attachment download (no endpoint to fetch content was found), customer-facing view of comments (`?customer=1`), real-browser run.
+
+## F58 — CRM teams, territories, portfolios and customer insights
+
+**Implemented**
+- `/app/crm/teams` (tabs Teams / Territories / Portfolios): team hierarchy with managers and members (add with lead flag, remove, move, edit parent/manager/disband); territories (countries as 2-letter codes validated before sending, industries, segments, priority, active) ; portfolios per owner (accounts, open deals, open value) and "Transfer a portfolio" (two different people and a reason). Management needs `crm.assign`; others see read-only lists.
+- `/app/crm/insights` (tabs Overview / Customer tiers / Retention / Satisfaction / Profitability): lead sources and conversion, open pipeline, deals with no recent activity, activity by rep, overdue activities; A/B/C/N tiers with revenue by segment and industry; at-risk / churned / active customers and "Update customer lifecycle stages" (`crm.assign`); ratings distribution and lowest-rated customers; margin per customer (server refusal outside base currency shown).
+- "Change owner" on account detail and (open) opportunity detail, "Assign by territory" on account detail — `crm.assign` only; server refusals shown verbatim.
+- Nav: Customer insights, Sales teams.
+
+**Tested (executed):** `tsc -b` clean; full vitest 65 files / 622 tests passed (14 new: `crm/teams.test.tsx` 10, owner tests in `accounts.test.tsx` 3 and `pipeline.test.tsx` 1); build ok; audit 0 vulnerabilities. No backend change.
+
+**Not done:** owner change on leads (no lead detail screen yet), ownership history view (API exists), team-based visibility indicator, charts (tables only), real-browser run.
+
+## F59 — Sales pricing
+
+**Implemented**
+- `/app/sales/pricing` (nav "Pricing", `sales.view`; changes need `sales.pricelist.manage`): four tabs.
+  - **Price lists:** list with type, currency, validity, price count, status; create (standard / promotion / customer-specific / contract, customer picker, validity dates; end-before-start rejected before sending; backend rules such as "contract needs dates" shown verbatim); activate/deactivate; per-list prices dialog (quantity breaks, unit price validated as a non-negative decimal, save, remove) with the list's price-change history.
+  - **Products:** searchable catalog with sale status, lowest price, largest discount, stock; "include products that cannot be sold"; per-product selling limits (can be sold, discontinued, lowest price, lowest margin %, largest discount %; blank clears; percentages ≤ 100).
+  - **Discount limits:** per category / customer classification ceilings (create, edit, switch off).
+  - **Price check:** which price a customer gets today for a product, currency, quantity and optional customer; "no price set" case.
+- Prices are sent as decimal strings, never floats.
+
+**Tested (executed):** `tsc -b` clean; full vitest 66 files / 630 tests passed (8 new in `sales/pricing.test.tsx`); build ok; audit 0 vulnerabilities. No backend change.
+
+**Not done:** product bundles editor (API exists), price-list pagination beyond first/next, tax rate on product profile, returns / deliveries / analytics screens (next Sales slices), real-browser run.
+
+## F60 — Sales deliveries
+
+**Backend change (small, tested):** `GET /api/v1/sales/deliveries?status=&order=` (paginated; logistics staff with `sales.delivery.manage` see all, others only deliveries of customers they may see; unknown status → 400) and the delivery payload now includes its `lines` (needed to record problems on arrival). Tests: `test_sales_dispatch.py` (listing scope/filter, lines) and `test_crm_sales_api.py` (permission matrix, pagination, status validation) — 10 passed.
+
+**Implemented (frontend)**
+- `/app/sales/deliveries` (nav "Deliveries"): performance card (deliveries, on-time %, average days in transit, late right now, problems on arrival, per carrier; reversed date range not sent), list with status filter, order numbers, Late and "Problem reported" flags, paging.
+- `/app/sales/deliveries/:id`: facts, goods, problems with link to the service case the server opened, proof-of-delivery documents (upload for `sales.delivery.manage`); for in-transit deliveries: confirm delivery (who received it, note, optional proof file, any number of reported problems — item, kind short/damaged/wrong, quantity within what was delivered, no duplicates), mark as failed (reason), set expected date (not before dispatch).
+- Sales order detail: "Dispatch goods" for confirmed / part-delivered orders (`sales.delivery.manage`): pick location from warehouses, dates, carrier, tracking, quantities defaulting to what is left (cannot exceed it); links to the new delivery.
+
+**Tested (executed):** backend 10 passed; `tsc -b` clean; full vitest 67 files / 642 tests passed (12 new in `sales/deliveries.test.tsx`); build ok; audit 0 vulnerabilities.
+
+**Not done:** deliveries listed on the order screen itself, lot codes on dispatch, downloading proof documents (no download endpoint), returns and sales analytics screens (next), real-browser run.
+
+## F61 — Sales returns
+
+**Implemented (frontend only; no backend change)**
+- `/app/sales/returns` (nav "Returns"): "Returns at a glance" (requests, by status, by reason, goods received back by disposition; reversed date range not sent), request list with status filter and paging.
+- Request a return (`sales.order.create`): pick a delivered order, quantity per item (limited to delivered minus already returned), what happens to each item (back in stock / hold for inspection / scrap), reason, description, free-replacement option. Server rules (return window, over-return, nothing delivered) shown verbatim.
+- Request detail: facts, items, decision; Approve / Reject (`sales.order.approve`; rejection needs a reason; the server's refusal to approve your own request is shown), Receive goods (`sales.delivery.manage`; location, a quarantine location only when an item is held for inspection, date), Cancel request (`sales.order.create`, pending or approved).
+
+**Tested (executed):** `tsc -b` clean; full vitest 68 files / 651 tests passed (9 new in `sales/returns.test.tsx`); build ok; audit 0 vulnerabilities.
+
+**Not done:** link from a received return to its credit note / the replacement order detail (links to the orders list), returns shown on the order screen, sales analytics / commissions / targets / contracts / backorders screens, real-browser run.
+
+## F62 — Sales analytics
+
+**Implemented (frontend only)**
+- `/app/sales/analytics` (nav "Sales analytics", `sales.view`; the server limits figures to the customers the viewer may see): performance for a date range (default last 90 days; a missing or reversed range is not sent) — orders, revenue, average order and discount, deals won %, days to close, quotes that became orders, top-5 share with a plain-words concentration reading, revenue by month bars, top customers; order backlog (still to deliver / invoice, oldest open orders); forecast (cautious / most likely / optimistic on top of the backlog, run rate, pipeline by month, 1–12 months ahead).
+- Amounts are the server's decimal strings, formatted for display only.
+
+**Tested (executed):** `tsc -b` clean; full vitest 69 files / 656 tests passed (5 new in `sales/analytics.test.tsx`); build ok. **`npm audit` now reports 5 high findings, all one advisory (picomatch ReDoS, GHSA-fc5q-39xc-vjpf) reached through vite/vitest/tinyglobby/fdir.** It is new since F61 (which audited clean). The installed picomatch 4.0.7 is the newest published release, so no patched version exists yet; the only "fix" npm offers is a downgrade to vitest 3.1.4, which I did not apply. These packages run only at build/test time and are not in the shipped bundle. Re-check `npm audit` next slice and upgrade once a patched picomatch is released. No backend change.
+
+**Not done:** targets, team attainment, commission plans/statements (next slice), receivables aging, contracts and backorders screens; chart library (CSS bars only); export; real-browser run.
+
+## F63 — Documents library (module 13, first frontend)
+
+**Implemented (frontend only)**
+- `/app/documents` (nav "Documents", `documents.view`): searchable library (title/number/tag, optional search inside files), filters for status, category, folder, expired; flags for expired / review overdue / legal hold; paging. "New document" (`documents.create`): title, category, visibility classification, folder, dates, description, file (size and empty-file checks; categories that require an expiry date enforce it before sending; multipart upload).
+- `/app/documents/:id`: details, versions table with status and rejection note, authenticated download, actions driven by the server's `can` flags (send for approval, send again, withdraw, publish), upload a new file, start a revision (both need a file and a reason), comments (add, reply with optional resolve, resolve), history, related documents, "I have read this" acknowledgement.
+- `/app/documents/acknowledgements`: my pending acknowledgements with overdue marking.
+- `downloadFromApi()` helper for token-authenticated downloads.
+
+**Tested (executed):** `tsc -b` clean; full vitest 70 files / 666 tests passed (10 new in `documents/documents.test.tsx`); build ok; `npm audit` still shows the picomatch advisory described in F62. No backend change.
+
+**Not done:** see `completion-audit.md` (folders/categories admin, grants, distribution, reviews, disposals, external documents, transmittals, RFIs, saved searches, reports; downloading is untested in the browser).
+
+## F64 — Sales targets and commission
+
+**Implemented (frontend only)**
+- `/app/sales/commissions` (nav "Targets and commission", `crm.view`; manager tabs need `crm.assign`): 
+  - **My results** — net sales, target, % reached, still to go for a date range (default this month; reversed range not sent).
+  - **Team** (managers) — everyone's attainment for the period and "Set a target" (amount must be above zero).
+  - **Plans** (managers) — commission plans with tiers and per-category special rates; create from plain text (`0:2` per line for tiers, `Category:5` for special rates; first tier must start at 0, tiers strictly increasing, rates 0–100, duplicates refused before sending); "Give someone a plan".
+  - **Statements** — list with status; managers work out a statement for a person and period; detail shows how the commission was calculated (per category and tiered part); Approve, Cancel (drafts), Send to payroll with optional pay month (approved). Salespeople see only approved/sent statements (the server filters) and get no action buttons. The server's separation-of-duties refusal is shown verbatim.
+
+**Tested (executed):** `tsc -b` clean; full vitest 71 files / 674 tests passed (8 new in `sales/commissions.test.tsx`); build ok. `npm audit` still shows the picomatch advisory from F62 (5 high, build/test tooling, no patched release). No backend change.
+
+**Not done:** editing/deactivating an existing plan (API supports create and assign only), a salesperson's own plan display, contracts, backorders, receivables aging (next Sales slice), real-browser run.
+
+## F65 — Sales: backorders, customer contracts, receivables aging
+
+**Implemented** (frontend only; existing endpoints):
+- `/app/sales/backorders` — lines waiting for stock; "Retry backorders" (`sales.delivery.manage`) reports how many lines were filled.
+- `/app/sales/contracts` — list with status filter, create dialog (customer, dates, optional committed value, auto-renew, agreed prices per product) with client-side checks mirrored by the server.
+- `/app/sales/contracts/:id` — use of contract (ordered vs committed, overdue obligations), agreed prices, obligations (add / mark done, `sales.quote.create`), revision history, activate / renew / end early (`sales.order.approve`).
+- `/app/sales/aging` — per-customer aging buckets with totals and an "as of" date.
+
+**Tested:** `features/sales/contracts.test.tsx` — 11 tests (validation helper, list, create body, activate, obligations, terminate with reason, backorder retry, aging date param, empty states). Full-suite, build and audit results are recorded in the delivery summary.
+
+**Not done in Sales:** editing a DRAFT contract's fields, amendments/milestones, quotation extras, bundle editor, commission plan edit/deactivate, account statement/credit view.
+
+## F66 — Procurement: overview and analytics
+
+**Implemented** (frontend only; existing endpoints):
+- `/app/procurement/overview` — the nine work-queue counts (linked to a screen where one exists: requisitions, purchase orders, match exceptions) and the late-deliveries table.
+- `/app/procurement/analytics` — date range; time to order / receive, supplier performance (on-time, rejection, defect, claims), spending grouped by supplier / category / month, and price paid against estimate. A backwards range is refused before any request.
+
+**Tested:** `features/procurement/analytics.test.tsx` — 5 tests. Full-suite, build and audit results are in the delivery summary.
+
+**Still without screens in Procurement:** purchase contracts, blanket orders, receipts and inspections, supplier returns and claims, PO amendments/terms/acknowledgement/close, tenders and plans, budgets, supplier profile/contacts/bank accounts/documents/standing/catalogue, supplier risk, requisition generate/consolidate/stock-check, settings.
+
+## F67 — Procurement: receiving and inspection
+
+**Implemented** (frontend only; existing endpoints): `/app/procurement/receiving` with two tabs.
+- Inspections (`procurement.receipt.inspect`): goods held in quarantine; record accept / reject quantities, reason required for rejection, optional serial numbers (not mixed with a split accept/reject, as the server also requires).
+- Receipts: goods received with per-line inspection status, lot, over-delivery and rejected quantities; attach evidence file (`inventory.goods.receive`).
+- The overview's "waiting for inspection" count now links here.
+
+**Tested:** `features/procurement/receiving.test.tsx` — 5 tests (helper, reject with reason, serials, evidence upload, permission hiding). Full-suite/build/audit results are in the delivery summary.
+
+**Still without screens in Procurement:** supplier returns and claims, purchase contracts, blanket orders, PO amendments/terms/acknowledgement/close, tenders and plans, budgets, supplier profile/contacts/bank/documents/standing/catalogue, supplier risk, requisition extras, settings.
+
+## F68 — Procurement: supplier returns and claims
+
+**Implemented** (frontend only; existing endpoints): `/app/procurement/returns` with two tabs.
+- Returns: list with status filter; new return from an order's received lines (quantity capped at what was received); approve (`procurement.return.approve`), send back (optional serial numbers), record the supplier credit note when the goods were invoiced (posted credit notes from that supplier only), close when nothing was invoiced, cancel a draft/approved return.
+- Claims: list with status filter; new claim (supplier, kind, amount, description); send, record the supplier's acceptance (amount not above the claim) or rejection (reason required), settle with a credit note. Separation of duties and all state rules stay on the server; its refusals are shown verbatim.
+- The overview's claims and credit counts now link here.
+
+**Tested:** `features/procurement/returnsClaims.test.tsx` — 11 tests. Full-suite/build/audit results are in the delivery summary.
+
+**Still without screens in Procurement:** purchase contracts, blanket orders, PO amendments/terms/acknowledgement/close, tenders and plans, budgets, supplier profile/contacts/bank/documents/standing/catalogue, supplier risk, requisition extras, settings.
+
+## F69 — Procurement: supplier contracts
+
+**Implemented** (frontend only; existing endpoints): `/app/procurement/contracts` — list with status filter; create (supplier, dates, currency, optional spending limit, auto-renew with notice days, agreed prices per product); a per-contract view of spending against the limit, days left and prices; approve a draft (`procurement.contract.approve`; the server refuses your own contract and unqualified suppliers, and the message is shown); extend (new end date must be later) and end early with a reason (`procurement.contract.manage`). The overview's "contracts ending" count links here.
+
+**Tested:** `features/procurement/contracts.test.tsx` — 7 tests. Full-suite/build/audit results are in the delivery summary.
+
+**Not done:** blanket orders — the backend has create/release endpoints but no list endpoint, so a screen would need a small backend addition first (blanket POs are not yet filterable in the PO list view). Also still without screens: PO amendments/terms/acknowledgement/close, tenders and plans, budgets, supplier profile/contacts/bank/documents/standing/catalogue, supplier risk, requisition extras, settings.

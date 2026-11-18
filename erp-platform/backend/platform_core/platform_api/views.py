@@ -11,7 +11,7 @@ from platform_core.audit.services import record_platform_event
 from platform_core.catalog import MODULES
 from platform_core.tenants import lifecycle
 from platform_core.tenants.models import ModuleEntitlement, ProvisioningJob, Tenant
-from platform_core.tenants.provisioning import apply_plan_entitlements, request_tenant
+from platform_core.tenants.provisioning import apply_plan_entitlements, request_tenant, resend_admin_setup_email
 from platform_core.tenants.tasks import provision_tenant_task
 from platform_core.users import services
 from platform_core.users.models import PlatformAdmin, TenantAccessGrant
@@ -87,6 +87,16 @@ class TenantDetail(APIView):
         jobs = ProvisioningJob.objects.filter(tenant=tenant).prefetch_related("steps").order_by("-created_at")[:5]
         ent = list(ModuleEntitlement.objects.filter(tenant=tenant).values("module", "entitled", "enabled"))
         return Response({**tenant_dict(tenant), "entitlements": ent, "provisioning_jobs": [job_dict(j) for j in jobs]})
+
+
+class TenantResendAdminSetup(APIView):
+    permission_classes = [require_platform("platform.tenants.provision")]
+
+    def post(self, request, tenant_id):
+        tenant = get_object_or_404(Tenant, id=tenant_id, is_platform=False)
+        resend_admin_setup_email(tenant)
+        record_platform_event("tenant.admin_setup_email_resent", actor_user_id=request.user.id, tenant_id=tenant.id, target_type="tenant", target_id=tenant.id, request=request)
+        return Response({"sent": True})
 
 
 class TenantRetryProvisioning(APIView):

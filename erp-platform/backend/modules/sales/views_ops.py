@@ -20,7 +20,21 @@ def _b64(b):
 def _delivery(d):
     return {"id": str(d.id), "number": d.number, "order": str(d.order_id), "status": d.status, "delivery_date": str(d.delivery_date), "expected_date": _s(d.expected_date), "delivered_at": d.delivered_at.isoformat() if d.delivered_at else None,
             "carrier": d.carrier, "tracking_ref": d.tracking_ref, "received_by": d.received_by, "pod_note": d.pod_note, "failure_reason": d.failure_reason,
+            "lines": [{"order_line": str(x.order_line_id), "quantity": str(x.quantity), "lot_code": x.lot_code} for x in d.lines.all()],
             "discrepancies": [{"order_line": str(x.order_line_id), "kind": x.kind, "quantity": str(x.quantity), "note": x.note, "case": _s(x.case_id)} for x in d.discrepancies.all()]}
+
+
+class Deliveries(APIView):
+    def get_permissions(self):
+        return perm("sales.view")
+
+    def get(self, request):
+        from shared.api.pagination import paginate
+
+        q = request.query_params
+        if q.get("status") and q["status"] not in ("DISPATCHED", "DELIVERED", "FAILED"):
+            raise ValidationFailed("Unknown delivery status.", code="invalid_status")
+        return paginate(request, dispatch.listing(request.user.id, q.get("status"), q.get("order")), _delivery)
 
 
 class DeliveryDetail(APIView):

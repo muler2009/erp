@@ -81,3 +81,18 @@ def test_failed_delivery_late_notice_and_performance(f):
     assert r["by_status"] == {"DELIVERED": 1, "FAILED": 1, "DISPATCHED": 1} and r["on_time_percent"] == 100.0 and r["avg_transit_days"] == 1.0
     assert r["by_carrier"]["DHL"] == {"deliveries": 3, "failed": 1} and r["late_now"] == 0
     assert dp.performance(p["rep2"].id)["total"] == 0
+
+
+@pytest.mark.django_db
+def test_delivery_listing_is_scoped_and_filterable(f):
+    p = f["people"]
+    o, d = ship(f)
+    assert [x.id for x in dp.listing(p["wh"].id)] == [d.id]  # logistics sees everything
+    assert [x.id for x in dp.listing(p["rep1"].id)] == [d.id]  # the rep who owns the customer
+    assert list(dp.listing(p["rep2"].id)) == []  # another rep's customer stays hidden
+    assert list(dp.listing(p["wh"].id, status="DELIVERED")) == []
+    assert [x.id for x in dp.listing(p["wh"].id, status="DISPATCHED", order_id=o.id)] == [d.id]
+    from modules.sales.views_ops import _delivery
+
+    body = _delivery(d)
+    assert [(l["order_line"], l["quantity"]) for l in body["lines"]] == [(str(o.lines.get().id), "10.0000")]  # the screen needs the lines to record discrepancies

@@ -66,6 +66,9 @@ class UserDirectory(APIView):
     permission_classes = [IsTenantMember]
 
     def get(self, request):
+        ids = request.query_params.get("ids", "").strip()
+        if ids:
+            return Response({"results": self._lookup(ids)})
         q = request.query_params.get("q", "").strip()
         if len(q) < 2:
             raise ValidationFailed("Type at least two characters.", code="query_too_short")
@@ -75,6 +78,23 @@ class UserDirectory(APIView):
             .order_by("user__display_name", "user_id")[:20]
         )
         return Response({"results": [{"id": str(m.user_id), "display_name": m.user.display_name} for m in qs]})
+
+    @staticmethod
+    def _lookup(raw):
+        """Resolve names for ids a record already points at (an owner, an assignee), whatever their status now: a former
+        colleague's name is still needed on the records they worked on. Only ids of this tenant's members answer, and
+        ids are unguessable UUIDs, so this does not allow browsing the directory."""
+        import uuid
+
+        parts = [p.strip() for p in raw.split(",") if p.strip()]
+        if len(parts) > 50:
+            raise ValidationFailed("Ask for at most 50 people at a time.", code="too_many_ids")
+        try:
+            wanted = [uuid.UUID(p) for p in parts]
+        except ValueError:
+            raise ValidationFailed("Each id must be a valid identifier.", code="invalid_id") from None
+        rows = TenantMembership.objects.filter(tenant=connection.tenant, user_id__in=wanted).select_related("user")
+        return [{"id": str(m.user_id), "display_name": m.user.display_name} for m in rows]
 
 
 class UserInvite(APIView):

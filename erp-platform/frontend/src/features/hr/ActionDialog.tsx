@@ -2,13 +2,14 @@ import { useState } from "react";
 
 import { errorMessage } from "../../shared/api/errors";
 import { Button, FormField, Modal, inputClass } from "../../shared/ui/primitives";
+import { UserSelect } from "../../shared/ui/UserSelect";
 
 /** Plain Errors thrown by a dialog's own checks are shown as written; everything else goes through the API error formatter. */
 export const failure = (e: unknown): string => (e instanceof Error ? e.message : errorMessage(e));
 
 /** A small reusable "ask, then POST" dialog for the lifecycle steps. */
-export function ActionDialog({ title, open, onClose, fields, submit, cta }: { title: string; open: boolean; onClose: () => void; fields: { name: string; label: string; type?: string; required?: boolean; options?: [string, string][] }[]; submit: (v: Record<string, string>) => Promise<unknown>; cta: string }) {
-  const [v, setV] = useState<Record<string, string>>({});
+export function ActionDialog({ title, open, onClose, fields, submit, cta, initial }: { title: string; open: boolean; onClose: () => void; fields: { name: string; label: string; type?: string; required?: boolean; options?: [string, string][]; searchUsers?: boolean }[]; submit: (v: Record<string, string>) => Promise<unknown>; cta: string; initial?: Record<string, string> }) {
+  const [v, setV] = useState<Record<string, string>>(initial ?? {});
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const go = async () => {
@@ -21,7 +22,9 @@ export function ActionDialog({ title, open, onClose, fields, submit, cta }: { ti
     <Modal title={title} open={open} onClose={onClose}>
       {fields.map((f) => (
         <FormField key={f.name} label={f.label} htmlFor={`ad-${f.name}`}>
-          {f.options ? <select id={`ad-${f.name}`} className={inputClass} value={v[f.name] ?? ""} onChange={(e) => setV({ ...v, [f.name]: e.target.value })}><option value="">Choose…</option>{f.options.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+          {f.options && f.searchUsers ? <UserSelect id={`ad-${f.name}`} value={v[f.name] ?? ""} onChange={(x) => setV({ ...v, [f.name]: x })} options={f.options} />
+            : f.options ? <select id={`ad-${f.name}`} className={inputClass} value={v[f.name] ?? ""} onChange={(e) => setV({ ...v, [f.name]: e.target.value })}><option value="">Choose…</option>{f.options.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>
+            : f.type === "textarea" ? <textarea id={`ad-${f.name}`} rows={3} className={inputClass} value={v[f.name] ?? ""} onChange={(e) => setV({ ...v, [f.name]: e.target.value })} />
             : <input id={`ad-${f.name}`} type={f.type ?? "text"} className={inputClass} value={v[f.name] ?? ""} onChange={(e) => setV({ ...v, [f.name]: e.target.value })} />}
         </FormField>
       ))}

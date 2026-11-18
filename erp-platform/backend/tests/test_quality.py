@@ -468,6 +468,7 @@ def test_audit_findings_stay_open_until_actioned_and_audit_closes_last(dm):
     assert codes(e) == "finding_missing"
     nc = audits.raise_finding(u(dm, "qi"), a.id, {"finding_type": "NONCONFORMITY", "severity": "MAJOR", "description": "Overdue instruments", "checklist_item_id": items[1].id, "due_date": TODAY + timedelta(days=14), "owner_id": u(dm, "qm")})
     ob = audits.raise_finding(u(dm, "qi"), a.id, {"finding_type": "OBSERVATION", "severity": "MINOR", "description": "Labels faded"})
+    assert audits.finding_dict(nc)["checklist_item_id"] == str(items[1].id) and audits.finding_dict(ob)["checklist_item_id"] is None
     audits.report(u(dm, "qi"), a.id, summary="One major non-conformity")
     with pytest.raises(DomainError) as e:
         audits.close_audit(u(dm, "qm"), a.id)

@@ -7,6 +7,7 @@ import type { SalesOrder } from "../../shared/api/types";
 import { formatMoney } from "../../shared/lib/money";
 import { useAccess } from "../../shared/permissions/usePermissions";
 import { DataTable } from "../../shared/ui/DataTable";
+import { DispatchDialog } from "./DispatchDialog";
 import { useAccountNames } from "../../shared/ui/useAccountNames";
 import { Badge, Button, Modal, PageHeader, Spinner, inputClass } from "../../shared/ui/primitives";
 
@@ -30,6 +31,7 @@ function Detail({ id, onClose }: { id: string | null; onClose: () => void }) {
   const [act, state] = useSalesOrderActionMutation();
   const [err, setErr] = useState<string | null>(null);
   const { can } = useAccess();
+  const [dispatching, setDispatching] = useState(false);
   const run = async (action: Action) => { setErr(null); try { await act({ id: id!, action }).unwrap(); } catch (e) { setErr(errorMessage(e)); } };
   return (
     <Modal title={data ? `Sales order ${data.number}` : "Sales order"} open={!!id} onClose={onClose}>
@@ -51,8 +53,10 @@ function Detail({ id, onClose }: { id: string | null; onClose: () => void }) {
           {err && <p role="alert" className="mt-3 text-sm text-red-700">{err}</p>}
           <div className="mt-4 flex flex-wrap justify-end gap-2">
             {orderActions(data.status, can).map((a) => <Button key={a.action} variant={a.variant ?? "primary"} loading={state.isLoading} onClick={() => void run(a.action)}>{a.text}</Button>)}
+            {(data.status === "CONFIRMED" || data.status === "PARTIALLY_DELIVERED") && can("sales.delivery.manage") && <Button onClick={() => setDispatching(true)}>Dispatch goods</Button>}
             <Button variant="secondary" onClick={onClose}>Close</Button>
           </div>
+          {dispatching && <DispatchDialog order={data} onClose={() => setDispatching(false)} />}
         </>
       )}
     </Modal>

@@ -45,6 +45,18 @@ def get(user_id, pk):
     return d
 
 
+def listing(user_id, status=None, order_id=None):
+    """Deliveries a person may see: logistics staff see all, others only those of customers they can see."""
+    qs = m.Delivery.objects.select_related("order").prefetch_related("lines", "discrepancies")
+    if not authz.has_permission(user_id, "sales.delivery.manage"):
+        qs = crm.scope(qs, user_id, owner_field="order__account__owner_id")
+    if status:
+        qs = qs.filter(status=status)
+    if order_id:
+        qs = qs.filter(order_id=order_id)
+    return qs.order_by("-delivery_date", "-number")
+
+
 files.register_access_check("sales.delivery", lambda uid, ref: (lambda d: d is not None and _can_see(uid, d))(m.Delivery.objects.select_related("order").filter(pk=ref).first()))
 
 

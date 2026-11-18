@@ -1,5 +1,7 @@
+import uuid
 from decimal import Decimal
 
+from django.db.models import Q
 from django.utils.dateparse import parse_date, parse_datetime
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -94,7 +96,17 @@ class Contacts(APIView):
         return perm("crm.manage" if self.request.method == "POST" else "crm.view")
 
     def get(self, request):
-        return paginate(request, services.scope(m.Contact.objects.all(), request.user.id), _contact)
+        qs = services.scope(m.Contact.objects.all(), request.user.id)
+        q = request.query_params
+        if q.get("account"):
+            try:
+                qs = qs.filter(account_id=uuid.UUID(q["account"]))
+            except ValueError:
+                raise ValidationFailed("account must be an id.", code="invalid_id") from None
+        if q.get("q"):
+            term = q["q"].strip()
+            qs = qs.filter(Q(first_name__icontains=term) | Q(last_name__icontains=term) | Q(email__icontains=term))
+        return paginate(request, qs, _contact)
 
     def post(self, request):
         b = request.data
