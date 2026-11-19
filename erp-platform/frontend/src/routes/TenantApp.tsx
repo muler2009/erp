@@ -85,6 +85,11 @@ import { ProcurementAnalyticsPage } from "../features/procurement/AnalyticsPage"
 import { ReceivingPage } from "../features/procurement/ReceivingPage";
 import { ReturnsClaimsPage } from "../features/procurement/ReturnsClaimsPage";
 import { PurchaseContractsPage } from "../features/procurement/PurchaseContractsPage";
+import { BlanketOrdersPage } from "../features/procurement/BlanketOrdersPage";
+import { SupplierProfilePage } from "../features/procurement/SupplierProfilePage";
+import TendersPage from "../features/procurement/TendersPage";
+import { SupplierRiskPage } from "../features/procurement/SupplierRiskPage";
+import { BudgetsPage } from "../features/procurement/BudgetsPage";
 import { SuppliersPage } from "../features/procurement/SuppliersPage";
 import { ProductsPage } from "../features/inventory/ProductsPage";
 import { MyTasksPage } from "../features/projects/MyTasksPage";
@@ -173,6 +178,11 @@ export function TenantApp() {
           <Route path="/app/procurement/receiving" element={<ReceivingPage />} />
           <Route path="/app/procurement/returns" element={<ReturnsClaimsPage />} />
           <Route path="/app/procurement/contracts" element={<PurchaseContractsPage />} />
+          <Route path="/app/procurement/blanket-orders" element={<BlanketOrdersPage />} />
+          <Route path="/app/procurement/suppliers/:id" element={<SupplierProfilePage />} />
+          <Route path="/app/procurement/tenders" element={<TendersPage />} />
+          <Route path="/app/procurement/supplier-risk" element={<SupplierRiskPage />} />
+          <Route path="/app/procurement/budgets" element={<BudgetsPage />} />
           <Route path="/app/procurement/suppliers" element={<SuppliersPage />} />
           <Route path="/app/procurement/requisitions" element={<RequisitionsPage />} />
           <Route path="/app/procurement/rfqs" element={<RfqsPage />} />

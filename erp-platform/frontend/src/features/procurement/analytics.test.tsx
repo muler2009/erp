@@ -24,7 +24,7 @@ describe("ProcurementOverviewPage", () => {
     expect(await screen.findByText("Late delivery lines", { selector: "div,span,dd" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /Invoices that do not match/ })).toHaveAttribute("href", "/app/procurement/match-exceptions");
     expect(screen.getByRole("link", { name: /waiting for inspection/ })).toHaveAttribute("href", "/app/procurement/receiving");
-    expect(screen.queryByRole("link", { name: /Late delivery lines|Supplier documents/ })).toBeNull();
+    expect(screen.queryByRole("link", { name: /Late delivery lines/ })).toBeNull();
     expect(await screen.findByText("PO-7")).toBeInTheDocument();
     expect(screen.getByText("17 days")).toBeInTheDocument();
     expect(screen.getByText("Globex")).toBeInTheDocument();

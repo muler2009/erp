@@ -103,3 +103,12 @@ def test_budget_api_permissions(api_env):
     assert api["pm"].post("/api/v1/procurement/budgets", body).status_code == 201
     assert api["po"].get("/api/v1/procurement/budgets/execution?fiscal_year=2026").json()["totals"]["budget"] == "100.0000"
     assert api["emp"].get("/api/v1/procurement/budgets").status_code == 403
+
+
+@pytest.mark.django_db
+def test_plan_list_includes_lines_for_revision(api_env):
+    env, api = api_env
+    body = {"code": "P1", "name": "Plan", "fiscal_year": 2026, "lines": [{"category": "IT", "quarter": 2, "planned_amount": "500"}, {"category": "Office", "quarter": 1, "planned_amount": "100", "description": "Chairs"}]}
+    assert api["pm"].post("/api/v1/procurement/plans", body).status_code == 201
+    rows = api["pm"].get("/api/v1/procurement/plans").json()["results"]
+    assert rows[0]["lines"] == [{"category": "Office", "description": "Chairs", "quarter": 1, "planned_amount": "100.0000"}, {"category": "IT", "description": "", "quarter": 2, "planned_amount": "500.0000"}]

@@ -9,6 +9,7 @@ import type { PurchaseOrder as PO } from "../../shared/api/types";
 import { useAccess } from "../../shared/permissions/usePermissions";
 import { DataTable } from "../../shared/ui/DataTable";
 import { MatchInvoiceDialog } from "./MatchPages";
+import { PoExtras } from "./PoExtras";
 import { Badge, Button, Modal, PageHeader, Spinner, inputClass } from "../../shared/ui/primitives";
 
 const STATUSES = ["DRAFT", "PENDING_APPROVAL", "APPROVED", "PARTIALLY_RECEIVED", "RECEIVED", "CLOSED", "CANCELLED"];
@@ -97,6 +98,7 @@ function Detail({ id, onClose }: { id: string | null; onClose: () => void }) {
             <div className="flex justify-between font-semibold"><dt>Total</dt><dd>{formatMoney(data.total)}</dd></div>
             <div className="flex justify-between"><dt>Invoiced so far</dt><dd>{formatMoney(data.invoiced_value)}</dd></div>
           </dl>
+          <PoExtras order={data} />
           {matching && <MatchInvoiceDialog order={data} open onClose={() => setMatching(false)} />}
           {receiving && <ReceivePanel order={data} onDone={() => setReceiving(false)} />}
           {err && <p role="alert" className="mt-3 text-sm text-red-700">{err}</p>}

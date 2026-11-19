@@ -760,3 +760,56 @@ Run on 2026-11-15 without Docker: Keycloak 26 from the release tarball, the Djan
 **Tested:** `features/procurement/contracts.test.tsx` — 7 tests. Full-suite/build/audit results are in the delivery summary.
 
 **Not done:** blanket orders — the backend has create/release endpoints but no list endpoint, so a screen would need a small backend addition first (blanket POs are not yet filterable in the PO list view). Also still without screens: PO amendments/terms/acknowledgement/close, tenders and plans, budgets, supplier profile/contacts/bank/documents/standing/catalogue, supplier risk, requisition extras, settings.
+
+## F70 — Procurement: PO terms, acknowledgement, delivery dates, amendments, closing; blanket orders
+
+**Backend (small, tested):** the purchase-order JSON now includes `kind`, `blanket`, `valid_to`, the terms, acknowledgement (`acknowledged_at`, `acknowledgment_ref`, `promised_date`) and `closed_reason`; lines include `released_quantity` and their delivery `schedule`; the list accepts `?kind=BLANKET`. Test: `tests/test_procurement_orders.py::test_po_detail_exposes_terms_acknowledgement_and_blanket_fields` (the file's 6 tests passed in a run on this change).
+
+**Frontend:**
+- PO detail now shows an "Order details" section (`PoExtras`): terms (editable on a draft), supplier acknowledgement, delivery dates per line, changes (request one at a time; approve / reject with reason by `procurement.purchase_order.approve` — the server refuses your own request), and close order with a reason.
+- `/app/procurement/blanket-orders`: list, create (items with ceiling quantity and price, valid-until), submit / approve, and "Order against" a blanket order with quantities capped at what is left.
+
+**Tested:** `features/procurement/poExtras.test.tsx` — 14 tests. Full-suite/build/audit results are in the delivery summary.
+
+**Still without screens in Procurement:** tenders and plans, budgets, supplier profile/contacts/bank/documents/standing/catalogue, supplier risk, requisition extras (generate/consolidate/stock-check/recurring/attachments), procurement settings, PO printable document, bid scoring/disqualify/clarifications/award-justified/single-source on RFQs.
+
+## F71 — Procurement: supplier profile and supplier risk
+
+**Implemented** (frontend only; existing endpoints):
+- `/app/procurement/suppliers/:id` (linked from the supplier list): details with edit (payment terms, early-payment discount, withholding tax, risk, preferred — range-checked as the server does), standing (reason required to suspend/blacklist or lift a blacklisting; optional suspended-until date) with the evaluation scorecard, contacts, bank accounts (`procurement.supplier.bank`; numbers shown masked; verification by a second person — the server's dual-control refusal is shown), documents with expiry, and the price catalogue (current prices; set a new price).
+- `/app/procurement/supplier-risk`: per-supplier standing / risk / expired documents / bank verification, and documents expiring within 30 days. The overview's "documents expiring" count links here.
+
+**Tested:** `features/procurement/supplierProfile.test.tsx` — 14 tests. Full-suite/build/audit results are in the delivery summary.
+
+**Not done:** attaching a file to a supplier document (the form records type, reference and expiry only), price history per product, product → preferred-suppliers view, tenders and plans, budgets, requisition extras, procurement settings, PO printable document, RFQ bid scoring/award extras.
+
+## F72 — Procurement: budgets and plans
+
+**Backend (small, tested):** the plan list now includes each plan's lines (needed to revise a plan). Test: `tests/test_procurement_budgets.py::test_plan_list_includes_lines_for_revision`.
+
+**Frontend:** `/app/procurement/budgets` with two tabs.
+- Budgets (`procurement.view`; changes need `procurement.budget.manage`): per-year use against budget (committed, spent, available, % used) with totals; create; revise (reason required, not below what is committed); close (the server refuses while commitments are open).
+- Plans (changes need `procurement.plan.manage`, approval `procurement.plan.approve`): create with category / quarter / amount lines; revise starting from the current lines (reason required, goes back for approval, earlier version kept); approve (the server refuses your own plan); compare a plan with committed and spent amounts per category.
+
+**Tested:** `features/procurement/budgets.test.tsx` — 12 tests. Full-suite/build/audit/backend results are in the delivery summary.
+
+**Not done in Procurement:** requisition extras (generate/consolidate/stock-check/recurring/attachments), procurement settings, PO printable document, RFQ bid scoring / disqualify / clarifications / award-justified / single-source, attaching files to supplier documents, price history per product.
+
+## F73 — Procurement: requisition extras
+
+**Implemented** (frontend only; existing endpoints), on the Purchase requisitions page:
+- "Generate replenishment" (`procurement.requisition.create`): one draft for items at or below reorder level; says when nothing needs ordering (running it twice creates nothing new, as the server guarantees).
+- "Consolidate for sourcing" (`procurement.rfq.manage`): choose approved requisitions on the current page, combine their outstanding quantities per product, then invite suppliers and create one RFQ (links to it).
+- In a requisition: emergency / project / cost-centre / auto-generated flags, "Check stock" (issue from stock, buy the shortfall, or buy), stop a recurring requisition, attach a supporting file (server enforces type/size).
+
+**Tested:** `features/procurement/requisitionExtras.test.tsx` — 10 tests. Full-suite/build/audit results are in the delivery summary.
+
+**Limits:** consolidation lists approved requisitions from the page currently loaded (no cross-page selection); the create-requisition form still does not expose priority, emergency justification, project / cost centre, type or recurrence (the server supports them).
+
+**Not done in Procurement:** procurement settings, PO printable document, RFQ bid scoring / disqualify / clarifications / award-justified / single-source, files on supplier documents, price history per product.
+
+## F74 — Procurement tenders (`/app/procurement/tenders`)
+- Implemented: tender list; create (title, closing time, committee of ≥2, invited suppliers or open-to-all, items, weighted criteria with exactly one price criterion summing to 100, minimum technical score); publish; close bidding; committee opens sealed bids; evaluation table with ranking and recommendation; score technical criteria; disqualify with reason; award with justification (required for non-recommended or non-compliant bids; creates the PO); bidder results once awarded.
+- Server remains authoritative (sealed bids, committee quorum, creator cannot award); the UI shows the server's message.
+- Tests: `features/procurement/tenders.test.tsx` (11).
+- Not done: RFQ clarifications, single-source PO, tender editing while in draft, attachments on tenders.

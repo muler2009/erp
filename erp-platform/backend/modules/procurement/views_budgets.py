@@ -56,7 +56,8 @@ class Plans(APIView):
         return perm("procurement.plan.manage" if self.request.method == "POST" else "procurement.view")
 
     def get(self, request):
-        return Response({"results": [{"id": str(p.id), "code": p.code, "name": p.name, "fiscal_year": p.fiscal_year, "status": p.status, "revision": p.revision} for p in m.ProcurementPlan.objects.order_by("-fiscal_year", "code")]})
+        return Response({"results": [{"id": str(p.id), "code": p.code, "name": p.name, "fiscal_year": p.fiscal_year, "status": p.status, "revision": p.revision,
+                                    "lines": [{"category": l.category, "description": l.description, "quarter": l.quarter, "planned_amount": str(l.planned_amount)} for l in p.lines.order_by("quarter", "category")]} for p in m.ProcurementPlan.objects.prefetch_related("lines").order_by("-fiscal_year", "code")]})
 
     def post(self, request):
         b = request.data

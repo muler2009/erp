@@ -35,9 +35,12 @@ def _req(r, lines=False):
 
 
 def _po(o, lines=False):
-    d = {"id": str(o.id), "number": o.number, "supplier": {"id": str(o.supplier_id), "name": o.supplier.name}, "currency": o.currency, "status": o.status, "order_date": str(o.order_date), "expected_date": _s(o.expected_date), "total": str(o.total), "invoiced_value": str(o.invoiced_value), "version": o.version, "workflow_instance_id": _s(o.workflow_instance_id), "contract": _s(o.contract_id)}
+    d = {"id": str(o.id), "number": o.number, "supplier": {"id": str(o.supplier_id), "name": o.supplier.name}, "currency": o.currency, "status": o.status, "order_date": str(o.order_date), "expected_date": _s(o.expected_date), "total": str(o.total), "invoiced_value": str(o.invoiced_value), "version": o.version, "workflow_instance_id": _s(o.workflow_instance_id), "contract": _s(o.contract_id),
+         "kind": o.kind, "blanket": _s(o.blanket_id), "valid_to": _s(o.valid_to), "payment_terms": o.payment_terms, "delivery_terms": o.delivery_terms, "delivery_address": o.delivery_address,
+         "acknowledged_at": o.acknowledged_at.isoformat() if o.acknowledged_at else None, "acknowledgment_ref": o.acknowledgment_ref, "promised_date": _s(o.promised_date), "closed_reason": o.closed_reason}
     if lines:
-        d["lines"] = [{"id": str(l.id), "line_no": l.line_no, "product": _s(l.product_id), "description": l.description, "quantity": str(l.quantity), "unit_price": str(l.unit_price), "received_quantity": str(l.received_quantity)} for l in o.lines.all()]
+        d["lines"] = [{"id": str(l.id), "line_no": l.line_no, "product": _s(l.product_id), "description": l.description, "quantity": str(l.quantity), "unit_price": str(l.unit_price), "received_quantity": str(l.received_quantity), "released_quantity": str(l.released_quantity),
+                      "schedule": [{"due_date": str(r.due_date), "quantity": str(r.quantity)} for r in l.schedule.order_by("due_date")]} for l in o.lines.all()]
     return d
 
 
@@ -234,6 +237,8 @@ class PurchaseOrders(APIView):
         qs = m.PurchaseOrder.objects.select_related("supplier")
         if request.query_params.get("status"):
             qs = qs.filter(status=request.query_params["status"])
+        if request.query_params.get("kind"):
+            qs = qs.filter(kind=request.query_params["kind"])
         return paginate(request, qs, _po)
 
     def post(self, request):

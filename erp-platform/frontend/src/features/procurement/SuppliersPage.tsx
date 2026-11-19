@@ -2,6 +2,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
+import { Link } from "react-router";
 import { z } from "zod";
 
 import { useCreateSupplierMutation, useListSuppliersQuery, useSupplierActionMutation } from "../../shared/api/endpoints";
@@ -78,7 +79,7 @@ export function SuppliersPage() {
   const manage = can("procurement.supplier.manage");
   const columns = useMemo<ColumnDef<Supplier>[]>(() => {
     const cols: ColumnDef<Supplier>[] = [
-      { header: "Name", accessorKey: "name" },
+      { header: "Name", cell: ({ row }) => <Link className="text-blue-700 underline" to={`/app/procurement/suppliers/${row.original.id}`}>{row.original.name}</Link> },
       { header: "Tax ID", accessorKey: "tax_id" },
       { header: "Email", accessorKey: "email" },
       { header: "Status", cell: ({ row }) => <Badge tone={tone(row.original.status)}>{pretty(row.original.status)}</Badge> },

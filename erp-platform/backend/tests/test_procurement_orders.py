@@ -120,3 +120,19 @@ def test_order_extension_api(api_env):
     assert api["po"].get(f"/api/v1/procurement/purchase-orders/{po['id']}/document").status_code == 409  # not approved yet
     assert api["po"].post(f"/api/v1/procurement/purchase-orders/{po['id']}/close", {"reason": "x"}).status_code == 403
     assert api["po"].get("/api/v1/procurement/overdue-deliveries").status_code == 200
+
+
+@pytest.mark.django_db
+def test_po_detail_exposes_terms_acknowledgement_and_blanket_fields(api_env):
+    env, api = api_env
+    from tests.test_procurement import po_lines as pl
+    body = {"supplier": str(env["supplier"].id), "currency": "USD", "order_date": "2026-03-15", "lines": pl(env, "10", "5")}
+    po = api["po"].post("/api/v1/procurement/purchase-orders", body).json()
+    api["po"].patch(f"/api/v1/procurement/purchase-orders/{po['id']}/terms", {"payment_terms": "Net 45", "delivery_address": "Dock 3"})
+    d = api["po"].get(f"/api/v1/procurement/purchase-orders/{po['id']}").json()
+    assert (d["kind"], d["payment_terms"], d["delivery_address"], d["acknowledged_at"], d["closed_reason"]) == ("STANDARD", "Net 45", "Dock 3", None, "")
+    assert d["lines"][0]["released_quantity"] == "0.0000" and d["lines"][0]["schedule"] == []
+    blanket = api["po"].post("/api/v1/procurement/blanket-orders", {"supplier": str(env["supplier"].id), "currency": "USD", "order_date": "2026-03-15", "valid_to": "2026-09-15", "lines": pl(env, "100", "8")}).json()
+    rows = api["po"].get("/api/v1/procurement/purchase-orders?kind=BLANKET").json()["results"]
+    assert [r["id"] for r in rows] == [blanket["id"]] and rows[0]["valid_to"] == "2026-09-15"
+    assert po["id"] not in [r["id"] for r in api["po"].get("/api/v1/procurement/purchase-orders?kind=BLANKET").json()["results"]]

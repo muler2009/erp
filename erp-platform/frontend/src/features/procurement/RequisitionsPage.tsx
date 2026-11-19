@@ -10,6 +10,7 @@ import type { Requisition } from "../../shared/api/types";
 import { formatMoney, multiplyMoney, parseMoney } from "../../shared/lib/money";
 import { useAccess } from "../../shared/permissions/usePermissions";
 import { DataTable } from "../../shared/ui/DataTable";
+import { ConsolidateDialog, GenerateButton, RequisitionExtras, SOURCING_STATUSES } from "./RequisitionExtras";
 import { Badge, Button, FormField, Modal, PageHeader, Spinner, inputClass } from "../../shared/ui/primitives";
 
 const pretty = (s: string) => s.toLowerCase().replace(/_/g, " ");
@@ -85,6 +86,7 @@ function Detail({ id, onClose }: { id: string | null; onClose: () => void }) {
             <tbody>{data.lines?.map((l) => <tr key={l.id} className="border-t border-slate-100"><td>{l.description}</td><td className="text-right">{formatMoney(l.quantity)}</td><td className="text-right">{formatMoney(l.estimated_unit_price)}</td></tr>)}</tbody>
           </table>
           <p className="mt-3 text-right text-sm font-semibold">Estimated total {formatMoney(data.estimated_total)}</p>
+          <RequisitionExtras req={data} />
           {data.workflow_instance_id && data.status === "SUBMITTED" && <p className="mt-2 text-sm text-slate-600">Waiting in the approvals workflow.</p>}
           {err && <p role="alert" className="mt-3 text-sm text-red-700">{err}</p>}
           <div className="mt-4 flex flex-wrap justify-end gap-2">
@@ -104,6 +106,7 @@ export function RequisitionsPage() {
   const { data, isLoading, error, refetch } = useListRequisitionsQuery({ cursor });
   const [creating, setCreating] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [consolidating, setConsolidating] = useState(false);
   const { can } = useAccess();
   const columns = useMemo<ColumnDef<Requisition>[]>(() => [
     { header: "Number", cell: ({ row }) => <button type="button" className="text-brand-700 underline" onClick={() => setOpenId(row.original.id)}>{row.original.number}</button> },
@@ -114,10 +117,14 @@ export function RequisitionsPage() {
   ], []);
   return (
     <>
-      <PageHeader title="Purchase requisitions" actions={can("procurement.requisition.create") ? <Button onClick={() => setCreating(true)}>New requisition</Button> : undefined} />
+      <PageHeader title="Purchase requisitions" actions={<div className="flex flex-wrap items-center gap-2">
+        {can("procurement.requisition.create") && <GenerateButton />}
+        {can("procurement.rfq.manage") && <Button variant="secondary" onClick={() => setConsolidating(true)}>Consolidate for sourcing</Button>}
+        {can("procurement.requisition.create") && <Button onClick={() => setCreating(true)}>New requisition</Button>}</div>} />
       <DataTable caption="Purchase requisitions" columns={columns} page={data} isLoading={isLoading} error={error} onRetry={refetch} emptyTitle="No requisitions" onCursor={setCursor} hasPrevious={cursor !== null} onFirst={() => setCursor(null)} />
       <NewRequisition open={creating} onClose={() => setCreating(false)} />
       <Detail id={openId} onClose={() => setOpenId(null)} />
+      {consolidating && <ConsolidateDialog candidates={(data?.results ?? []).filter((r) => SOURCING_STATUSES.includes(r.status))} onClose={() => setConsolidating(false)} />}
     </>
   );
 }

@@ -14,7 +14,7 @@ export const QUEUE: { key: keyof ProcWorkQueue; label: string; to?: string }[] =
   { key: "contracts_expiring_60d", label: "Contracts ending within 60 days", to: "/app/procurement/contracts" },
   { key: "open_claims", label: "Open claims against suppliers", to: "/app/procurement/returns" },
   { key: "returns_awaiting_credit", label: "Returns waiting for a supplier credit", to: "/app/procurement/returns" },
-  { key: "supplier_documents_expiring_30d", label: "Supplier documents expiring within 30 days" },
+  { key: "supplier_documents_expiring_30d", label: "Supplier documents expiring within 30 days", to: "/app/procurement/supplier-risk" },
 ];
 
 export function ProcurementOverviewPage() {

@@ -167,11 +167,13 @@ export interface RequisitionLine { id: string; line_no: number; product: string 
 export interface Requisition {
   id: string; number: string; title: string; status: string; requester_id: string; estimated_total: string; needed_by: string | null;
   workflow_instance_id: string | null; priority: string | null; lines?: RequisitionLine[];
+  source?: string; recurring_every_days?: number | null; project_ref?: string; cost_center_ref?: string; procurement_type?: string;
 }
-export interface PurchaseOrderLine { id: string; line_no: number; product: string | null; description: string; quantity: string; unit_price: string; received_quantity: string }
+export interface PurchaseOrderLine { id: string; line_no: number; product: string | null; description: string; quantity: string; unit_price: string; received_quantity: string; released_quantity?: string; schedule?: { due_date: string; quantity: string }[] }
 export interface PurchaseOrder {
   id: string; number: string; supplier: { id: string; name: string }; currency: string; status: string; order_date: string;
   expected_date: string | null; total: string; invoiced_value: string; version: number; workflow_instance_id: string | null; lines?: PurchaseOrderLine[];
+  kind?: "STANDARD" | "BLANKET" | "RELEASE"; blanket?: string | null; valid_to?: string | null; payment_terms?: string; delivery_terms?: string; delivery_address?: string; acknowledged_at?: string | null; acknowledgment_ref?: string; promised_date?: string | null; closed_reason?: string;
 }
 
 export interface Product {
@@ -619,3 +621,27 @@ export interface SupplierClaimRow { id: string; number: string; supplier: string
 
 export interface PurchaseContractRow { id: string; number: string; title: string; supplier: { id: string; name: string }; status: "DRAFT" | "ACTIVE" | "EXPIRED" | "TERMINATED"; start_date: string; end_date: string; currency: string; value_limit: string | null }
 export interface PurchaseContractReport { number: string; supplier: string; status: string; start_date: string; end_date: string; currency: string; value_limit: string | null; consumed: string; remaining: string | null; days_left: number; prices: { product: string; unit_price: string }[] }
+
+export interface PoAmendmentRow { id: string; number: number; status: "PENDING" | "APPROVED" | "REJECTED"; reason: string; old_total: string; new_total: string; changes: { lines?: { line: string; quantity: string; unit_price: string }[]; expected_date?: string } }
+
+export interface SupplierProfileData { id: string; name: string; legal_name: string; tax_id: string; registration_no: string; email: string; phone: string; website: string; category: string; address: Record<string, string>; payment_terms_days: number; early_discount_percent: string; early_discount_days: number; wht_percent: string; currency: string; risk_level: "LOW" | "MEDIUM" | "HIGH"; is_preferred: boolean; status: string; standing: "GOOD" | "SUSPENDED" | "BLACKLISTED"; standing_reason: string; scorecard: { evaluations: number; delivery: number | null; quality: number | null; price: number | null; overall: number | null }; contacts: { id: string; name: string; role: string; email: string; phone: string; primary: boolean }[]; documents: { id: string; type: string; reference: string; expiry_date: string | null }[] }
+export interface SupplierBankRow { id: string; bank_name: string; account_name: string; account_number: string; currency: string; default: boolean; verified: boolean }
+export interface SupplierCatalogueRow { product: string; unit_price: string; currency: string; valid_from: string; valid_to: string | null }
+export interface SupplierRiskRow { supplier: string; status: string; standing: string; risk_level: string; expired_documents: number; verified_bank: boolean }
+export interface ExpiringDoc { supplier: string; supplier_id: string; doc_type: string; reference: string; expiry_date: string; status: "EXPIRED" | "EXPIRING" }
+
+export interface ProcBudgetRow { id: string; code: string; name: string; fiscal_year: number; category: string; cost_center_ref: string; enforcement: "BLOCK" | "WARN"; status: "OPEN" | "CLOSED"; budget: string; committed: string; actual: string; open_commitment: string; available: string; utilisation_pct: string | null }
+export interface ProcBudgetExecution { fiscal_year: number; rows: ProcBudgetRow[]; totals: { budget: string; committed: string; actual: string; available: string } }
+export interface PlanLineRow { category: string; description: string; quarter: number; planned_amount: string }
+export interface ProcPlanRow { id: string; code: string; name: string; fiscal_year: number; status: "DRAFT" | "APPROVED" | "CLOSED"; revision: number; lines: PlanLineRow[] }
+export interface PlanVsActual { plan: string; revision: number; status: string; rows: { category: string; planned: string; committed: string; actual: string; variance: string }[] }
+
+export interface StockCheckRow { line: number; description: string; stock_item: boolean; needed?: string; available?: string; shortfall?: string; recommendation: "PURCHASE" | "ISSUE_FROM_STOCK" | "PARTIAL_FROM_STOCK" }
+export interface ConsolidatedLine { product: string | null; description: string; quantity: string; sources: { requisition: string; line: number; quantity: string }[] }
+
+export interface TenderCriterion { name: string; type: "FINANCIAL" | "TECHNICAL"; weight: number }
+export interface TenderRow { id: string; number: string; title: string; kind: string; status: string; closing_at: string | null; criteria: TenderCriterion[]; committee: string[]; opened_at: string | null; open_to_all: boolean; bids_visible: boolean }
+export interface TenderInput { title: string; lines: { description: string; quantity: string }[]; committee: string[]; closing_at: string; criteria: TenderCriterion[]; suppliers?: string[]; open_to_all?: boolean; min_technical_score?: number }
+export interface TenderEvalRow { quotation: string; supplier: string; total_base: string; scores: Record<string, number>; weighted_score: string | number | null; compliant: boolean; issues: string[]; rank: number | null }
+export interface TenderEvaluation { rfq: string; criteria: TenderCriterion[]; results: TenderEvalRow[]; recommended: string | null }
+export interface BidderResult { supplier: string; outcome: "AWARDED" | "DISQUALIFIED" | "NOT_SELECTED"; rank: number | null; weighted_score: string | number | null; reason: string }
