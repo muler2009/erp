@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Link } from "react-router";
 
-import { useCreateDocumentMutation, useListDocCategoriesQuery, useListDocClassificationsQuery, useListDocFoldersQuery, useListDocumentsQuery } from "../../shared/api/endpoints";
+import { useDeleteDocSearchMutation, useListDocSearchesQuery, useSaveDocSearchMutation, useCreateDocumentMutation, useListDocCategoriesQuery, useListDocClassificationsQuery, useListDocFoldersQuery, useListDocumentsQuery } from "../../shared/api/endpoints";
 import { errorMessage } from "../../shared/api/errors";
 import type { DocRow } from "../../shared/api/types";
 import { useAccess } from "../../shared/permissions/usePermissions";
+import { ActionDialog } from "../hr/ActionDialog";
 import { Badge, Button, Card, EmptyState, ErrorState, FormField, Modal, PageHeader, Spinner, inputClass } from "../../shared/ui/primitives";
 
 export const DOC_STATUS: Record<string, { label: string; tone: "green" | "red" | "amber" | "slate" }> = { DRAFT: { label: "Draft", tone: "slate" }, UNDER_REVIEW: { label: "In review", tone: "amber" }, PUBLISHED: { label: "Published", tone: "green" }, OBSOLETE: { label: "Obsolete", tone: "red" }, ARCHIVED: { label: "Archived", tone: "slate" } };
@@ -71,10 +72,28 @@ export function DocumentsPage() {
   const folders = useListDocFoldersQuery();
   const { data, isLoading, error, refetch } = useListDocumentsQuery({ cursor, q: q.trim(), full_text: fullText && !!q.trim(), ...filters });
   const reset = () => setCursor(null);
+  const searches = useListDocSearchesQuery();
+  const [saveSearch] = useSaveDocSearchMutation();
+  const [deleteSearch] = useDeleteDocSearchMutation();
+  const [saving, setSaving] = useState(false);
+  const [searchErr, setSearchErr] = useState<string | null>(null);
+  const apply = (p: Record<string, string | boolean>) => { setQ(String(p.q ?? "")); setFullText(p.full_text === true); setFilters({ status: String(p.status ?? ""), category_code: String(p.category_code ?? ""), folder: String(p.folder ?? ""), expired: p.expired === true }); reset(); };
   return (
     <>
       <PageHeader title="Documents" description="Controlled documents, their versions and approvals." actions={can("documents.create") ? <Button onClick={() => setCreating(true)}>New document</Button> : undefined} />
-      <p className="mb-3 text-sm"><Link className="text-indigo-700 underline" to="/app/documents/acknowledgements">Documents waiting for my acknowledgement</Link></p>
+      <p className="mb-3 text-sm"><Link className="text-indigo-700 underline" to="/app/documents/acknowledgements">Documents waiting for my acknowledgement</Link> · <Link className="text-indigo-700 underline" to="/app/documents/favourites">My favourites</Link></p>
+      <Card title="Saved searches" actions={<Button variant="secondary" onClick={() => setSaving(true)}>Save this search</Button>}>
+        {searchErr && <p role="alert" className="mb-2 text-sm text-red-700">{searchErr}</p>}
+        {searches.data?.length === 0 && <p className="text-sm text-slate-500">Nothing saved yet. Set up a search above and choose “Save this search”.</p>}
+        <ul className="flex flex-wrap gap-2">{searches.data?.map((x) => (
+          <li key={x.id} className="flex items-center gap-1 rounded-md bg-slate-100 px-2 py-1 text-sm">
+            <button type="button" className="text-indigo-700 underline" onClick={() => apply(x.params)}>{x.name}</button>
+            <button type="button" aria-label={`Delete saved search ${x.name}`} className="text-slate-500" onClick={() => { setSearchErr(null); deleteSearch(x.id).unwrap().catch((e) => setSearchErr(errorMessage(e))); }}>×</button>
+          </li>
+        ))}</ul>
+      </Card>
+      {saving && <ActionDialog title="Save this search" cta="Save" open onClose={() => setSaving(false)} fields={[{ name: "name", label: "Name", required: true }]}
+        submit={async (v) => { await saveSearch({ name: (v.name ?? "").trim(), params: { q: q.trim(), full_text: fullText, ...filters } }).unwrap(); }} />}
       <Card title="Library">
         <div className="mb-3 flex flex-wrap items-end gap-3">
           <FormField label="Search" htmlFor="dl-q"><input id="dl-q" className={inputClass} value={q} placeholder="Title, number or tag" onChange={(e) => { setQ(e.target.value); reset(); }} /></FormField>

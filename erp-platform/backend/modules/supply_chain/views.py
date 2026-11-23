@@ -43,7 +43,7 @@ def _ship(s, detail=False):
     d = {"id": str(s.id), "number": s.number, "kind": s.kind, "status": s.status, "carrier": _s(s.carrier_id), "route": _s(s.route_id), "origin": s.origin, "destination": s.destination, "planned_dispatch": str(s.planned_dispatch), "planned_arrival": str(s.planned_arrival),
          "actual_dispatch": _s(s.actual_dispatch), "actual_arrival": _s(s.actual_arrival), "tracking_ref": s.tracking_ref, "weight_kg": str(s.weight_kg), "sales_delivery_id": _s(s.sales_delivery_id), "purchase_order_id": _s(s.purchase_order_id), "transfer_order_id": _s(s.transfer_order_id), "vehicle_ref": _s(s.vehicle_ref_id), "consolidated_into": _s(s.consolidated_into_id), "pod_received_by": s.pod_received_by, "pod_at": _s(s.pod_at), "pod_file": _s(s.pod_file_id)}
     if detail:
-        d["lines"] = [{"product": _s(x.product_id), "description": x.description, "quantity": str(x.quantity), "received": _s(x.received_quantity), "damaged": str(x.damaged_quantity), "discrepancy_note": x.discrepancy_note} for x in s.lines.all()]
+        d["lines"] = [{"id": str(x.id), "product": _s(x.product_id), "description": x.description, "quantity": str(x.quantity), "received": _s(x.received_quantity), "damaged": str(x.damaged_quantity), "discrepancy_note": x.discrepancy_note} for x in s.lines.all()]
         d["events"] = [{"status": e.status, "location": e.location, "note": e.note, "at": str(e.occurred_at)} for e in s.events.order_by("occurred_at", "id")]
         d["costs"] = [{"type": c.cost_type, "amount": str(c.amount), "description": c.description} for c in s.costs.all()]
         d["exceptions"] = [_exc(x) for x in s.exceptions.all()]
@@ -55,7 +55,7 @@ def _exc(x):
 
 
 def _fc(f):
-    return {"id": str(f.id), "product": str(f.product_id), "period_start": str(f.period_start), "quantity": str(f.quantity), "method": f.method, "status": f.status}
+    return {"id": str(f.id), "product": str(f.product_id), "sku": f.product.sku, "period_start": str(f.period_start), "quantity": str(f.quantity), "method": f.method, "status": f.status}
 
 
 def _sg(s):
@@ -204,7 +204,7 @@ class Forecasts(APIView):
         return perm("supply_chain.plan.manage" if self.request.method == "POST" else "supply_chain.view")
 
     def get(self, request):
-        qs = m.DemandForecast.objects.all()
+        qs = m.DemandForecast.objects.select_related("product")
         if request.query_params.get("product"):
             qs = qs.filter(product_id=request.query_params["product"])
         return paginate(request, qs, _fc, ordering="period_start")

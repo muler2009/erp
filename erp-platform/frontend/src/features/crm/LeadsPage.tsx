@@ -1,3 +1,4 @@
+import { LeadConsentDialog } from "./CrmSetup";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { ColumnDef } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
@@ -11,6 +12,7 @@ import { parseMoney } from "../../shared/lib/money";
 import { useAccess } from "../../shared/permissions/usePermissions";
 import { DataTable } from "../../shared/ui/DataTable";
 import { Badge, Button, FormField, Modal, PageHeader, inputClass } from "../../shared/ui/primitives";
+import { LeadImportDialog, LeadMergeDialog } from "./LeadTools";
 
 export const leadSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(200),
@@ -103,6 +105,9 @@ export function LeadsPage() {
   const { data, isLoading, error, refetch } = useListLeadsQuery({ cursor, status });
   const [setLeadStatus] = useSetLeadStatusMutation();
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [dupOf, setDupOf] = useState<Lead | null>(null);
+  const [consentOf, setConsentOf] = useState<Lead | null>(null);
   const [target, setTarget] = useState<Target>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const { can } = useAccess();
@@ -123,6 +128,8 @@ export function LeadsPage() {
             {next.includes("CONTACTED") && <Button variant="secondary" aria-label={`Mark ${l.name} contacted`} onClick={() => void move("CONTACTED")}>Contacted</Button>}
             {next.includes("QUALIFIED") && <Button variant="secondary" aria-label={`Qualify ${l.name}`} onClick={() => void move("QUALIFIED")}>Qualify</Button>}
             {l.status === "QUALIFIED" && <Button aria-label={`Convert ${l.name}`} onClick={() => setTarget({ lead: l, mode: "convert" })}>Convert</Button>}
+            {!["CONVERTED", "MERGED"].includes(l.status) && <Button variant="secondary" aria-label={`Find duplicates of ${l.name}`} onClick={() => setDupOf(l)}>Duplicates</Button>}
+            {!["CONVERTED", "MERGED"].includes(l.status) && <Button variant="secondary" aria-label={`Marketing consent for ${l.name}`} onClick={() => setConsentOf(l)}>Consent</Button>}
             {next.includes("DISQUALIFIED") && <Button variant="secondary" aria-label={`Disqualify ${l.name}`} onClick={() => setTarget({ lead: l, mode: "DISQUALIFIED" })}>Disqualify</Button>}
           </div>
         );
@@ -132,7 +139,7 @@ export function LeadsPage() {
   }, [manage, setLeadStatus]);
   return (
     <>
-      <PageHeader title="Leads" actions={manage ? <Button onClick={() => setCreating(true)}>New lead</Button> : undefined} />
+      <PageHeader title="Leads" actions={manage ? <div className="flex gap-2"><Button variant="secondary" onClick={() => setImporting(true)}>Import leads</Button><Button onClick={() => setCreating(true)}>New lead</Button></div> : undefined} />
       <label className="mb-3 flex items-center gap-2 text-sm">Status
         <select className={`${inputClass} w-auto`} value={status} onChange={(e) => { setStatus(e.target.value); setCursor(null); }}>
           <option value="">All</option>{["NEW", "CONTACTED", "QUALIFIED", "DISQUALIFIED", "CONVERTED"].map((s) => <option key={s} value={s}>{pretty(s)}</option>)}
@@ -141,7 +148,10 @@ export function LeadsPage() {
       {actionError && <p role="alert" className="mb-3 rounded-md bg-red-50 p-3 text-sm text-red-800">{actionError}</p>}
       <DataTable caption="Leads" columns={columns} page={data} isLoading={isLoading} error={error} onRetry={refetch} emptyTitle="No leads" onCursor={setCursor} hasPrevious={cursor !== null} onFirst={() => setCursor(null)} />
       <CreateDialog open={creating} onClose={() => setCreating(false)} />
+      {consentOf && <LeadConsentDialog lead={consentOf} onClose={() => setConsentOf(null)} />}
       <ActionDialog target={target} onClose={() => setTarget(null)} />
+      {importing && <LeadImportDialog onClose={() => setImporting(false)} />}
+      {dupOf && <LeadMergeDialog lead={dupOf} onClose={() => setDupOf(null)} />}
     </>
   );
 }

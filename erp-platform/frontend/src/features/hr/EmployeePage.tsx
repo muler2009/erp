@@ -4,7 +4,7 @@ import { useParams } from "react-router";
 import {
   useAddContractMutation, useAddPersonalRecordMutation, useAssignmentDecisionMutation, useChangeAssignmentMutation, useCompleteChecklistItemMutation,
   useAssignComponentMutation, useEmployeeActionMutation, useEndContractMutation, useGetSalaryHistoryQuery, useListComponentsQuery, useListEmployeePayslipsQuery, useListDepartmentsQuery, useListEmployeesQuery, useListPositionsQuery, useEvaluateProbationMutation, useGetAssignmentChangesQuery, useGetEmployeeContractsQuery,
-  useGetEmployeeHistoryQuery, useGetEmployeeProfileQuery, useGetEmployeeQuery, useRecordSettlementMutation, useRemovePersonalRecordMutation, useUploadEmployeeDocumentMutation,
+  useGetEmployeeDayQuery, useGetEmployeeHistoryQuery, useGetEmployeeProfileQuery, useGetEmployeeQuery, useRecordSettlementMutation, useRemovePersonalRecordMutation, useUploadEmployeeDocumentMutation,
 } from "../../shared/api/endpoints";
 import { errorMessage } from "../../shared/api/errors";
 import { formatMoney, parseMoney } from "../../shared/lib/money";
@@ -23,6 +23,30 @@ export function validateContract(f: { start: string; end: string; salary: string
   if (s === null || s <= 0n) return "Monthly salary must be more than 0.";
   if (!/^[A-Za-z]{3}$/.test(f.currency.trim())) return "Currency must be a 3-letter code such as ETB.";
   return null;
+}
+
+export function DaySummary({ id }: { id: string }) {
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const q = useGetEmployeeDayQuery({ id, date });
+  return (
+    <Card title="Attendance on a day">
+      <label className="mb-2 block text-sm">Day <input aria-label="Day" type="date" className={inputClass} value={date} onChange={(e) => e.target.value && setDate(e.target.value)} /></label>
+      {q.isFetching && <Spinner />}
+      {q.error && <ErrorState error={q.error} onRetry={q.refetch} />}
+      {q.data && !q.isFetching && (
+        <dl className="grid grid-cols-2 gap-2 text-sm md:grid-cols-4">
+          <div><dt className="text-xs text-slate-500">Status</dt><dd>{pretty(q.data.status)}</dd></div>
+          <div><dt className="text-xs text-slate-500">Day type</dt><dd>{pretty(q.data.day_type)}</dd></div>
+          <div><dt className="text-xs text-slate-500">Scheduled hours</dt><dd>{Number(q.data.scheduled_hours)}</dd></div>
+          <div><dt className="text-xs text-slate-500">Worked hours</dt><dd>{Number(q.data.worked_hours)}</dd></div>
+          <div><dt className="text-xs text-slate-500">Late (minutes)</dt><dd>{q.data.late_minutes}</dd></div>
+          <div><dt className="text-xs text-slate-500">Left early (minutes)</dt><dd>{q.data.early_minutes}</dd></div>
+          <div><dt className="text-xs text-slate-500">Overtime hours</dt><dd>{Number(q.data.overtime_hours)}</dd></div>
+          <div><dt className="text-xs text-slate-500">Problems</dt><dd>{q.data.exceptions.length ? q.data.exceptions.map((x) => pretty(x)).join(", ") : "None"}</dd></div>
+        </dl>
+      )}
+    </Card>
+  );
 }
 
 export function EmployeePage() {
@@ -65,7 +89,7 @@ export function EmployeePage() {
           <Card title="Checklist">{e.checklist.length === 0 ? <EmptyState title="No checklist items" /> : <ul className="space-y-2 text-sm">{e.checklist.map((i) => <li key={i.id} className="flex items-center justify-between"><span>{i.title} <span className="text-slate-500">({i.kind.toLowerCase()})</span></span>{i.done_at ? <Badge tone="green">Done</Badge> : <Button variant="secondary" onClick={() => void tick(i.id)}>Mark done</Button>}</li>)}</ul>}</Card>
         </div>
       )}
-      {tab === "employment" && <><EmploymentTab id={id} /><PayExtras id={id} /></>}
+      {tab === "employment" && <><EmploymentTab id={id} /><PayExtras id={id} /><DaySummary id={id} /></>}
       {tab === "records" && <RecordsTab id={id} />}
       {tab === "assignment" && <AssignmentTab id={id} />}
       {tab === "history" && <HistoryTab id={id} />}

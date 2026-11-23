@@ -27,7 +27,7 @@ describe("tenantSchema", () => {
 describe("TenantsPage", () => {
   it("offers lifecycle actions by status and permission", async () => {
     server.use(list([tenant(), tenant({ id: "t2", name: "Beta", status: "PROVISIONING_FAILED" })]));
-    renderWithProviders(<TenantsPage />, { permissions: ["platform.tenants.view", "platform.tenants.lifecycle"] });
+    renderWithProviders(<TenantsPage />, { permissions: ["platform.tenants.view", "platform.tenants.lifecycle", "platform.tenants.provision"] });
     expect(await screen.findByRole("button", { name: "Suspend Acme" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry provisioning Beta" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Create tenant" })).toBeNull();
@@ -69,5 +69,32 @@ describe("TenantsPage", () => {
     renderWithProviders(<TenantsPage />, { permissions: ["platform.tenants.view", "platform.tenants.lifecycle"] });
     await userEvent.click(await screen.findByRole("button", { name: "Suspend Acme" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("Cannot suspend.");
+  });
+});
+
+describe("resend setup email", () => {
+  it("shows only for active tenants with the provision permission", async () => {
+    server.use(list([tenant(), tenant({ id: "t2", name: "Beta", status: "SUSPENDED" })]));
+    const { unmount } = renderWithProviders(<TenantsPage />, { permissions: ["platform.tenants.view", "platform.tenants.provision"] });
+    expect(await screen.findByRole("button", { name: "Resend setup email Acme" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Resend setup email Beta" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Suspend/ })).toBeNull();
+    unmount();
+    renderWithProviders(<TenantsPage />, { permissions: ["platform.tenants.view", "platform.tenants.lifecycle"] });
+    await screen.findByRole("button", { name: "Suspend Acme" });
+    expect(screen.queryByRole("button", { name: /Resend setup email/ })).toBeNull();
+  });
+  it("confirms on success and shows the server message on failure", async () => {
+    let fail = true;
+    server.use(list([tenant()]), http.post("*/api/v1/platform/tenants/t1/resend-admin-setup", () => fail
+      ? HttpResponse.json({ error: { code: "identity_mail_failed", message: "The identity provider could not send the email.", details: [] } }, { status: 400 })
+      : HttpResponse.json({ sent: true })));
+    renderWithProviders(<TenantsPage />, { permissions: ["platform.tenants.view", "platform.tenants.provision"] });
+    await userEvent.click(await screen.findByRole("button", { name: "Resend setup email Acme" }));
+    expect(await screen.findByText(/could not send the email/)).toBeInTheDocument();
+    fail = false;
+    await userEvent.click(screen.getByRole("button", { name: "Resend setup email Acme" }));
+    expect(await screen.findByText(/Setup email sent again to the administrator of Acme/)).toBeInTheDocument();
+    expect(screen.queryByText(/could not send the email/)).toBeNull();
   });
 });

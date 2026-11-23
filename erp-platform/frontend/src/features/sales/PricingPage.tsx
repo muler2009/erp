@@ -8,6 +8,7 @@ import { useAccess } from "../../shared/permissions/usePermissions";
 import { Badge, Button, Card, EmptyState, ErrorState, FormField, Modal, PageHeader, Spinner, inputClass } from "../../shared/ui/primitives";
 import { ActionDialog } from "../hr/ActionDialog";
 import { useUserNames } from "../quality/names";
+import { BundleDialog } from "./BundleDialog";
 
 const TABS = ["Price lists", "Products", "Discount limits", "Price check"] as const;
 export const KIND_LABEL: Record<string, string> = { STANDARD: "Standard", PROMOTIONAL: "Promotion", CUSTOMER: "Customer-specific", CONTRACT: "Contract" };
@@ -142,6 +143,7 @@ function Products({ canManage }: { canManage: boolean }) {
   const [all, setAll] = useState(false);
   const { data, isLoading, error, refetch } = useGetSalesCatalogQuery({ search: q.trim(), all });
   const [editing, setEditing] = useState<CatalogItem | null>(null);
+  const [bundling, setBundling] = useState<CatalogItem | null>(null);
   return (
     <>
       <div className="mb-3 flex flex-wrap items-end gap-3">
@@ -155,9 +157,10 @@ function Products({ canManage }: { canManage: boolean }) {
             <tr key={p.id} className="border-t border-slate-100"><td className="py-1">{p.sku}</td><td>{p.name}{p.is_bundle && <Badge tone="slate">Bundle</Badge>}</td><td>{p.category || "–"}</td>
               <td><Badge tone={p.discontinued ? "red" : p.sellable ? "green" : "amber"}>{p.discontinued ? "Discontinued" : p.sellable ? "For sale" : "Not for sale"}</Badge></td>
               <td className="text-right">{p.min_price ? formatMoney(p.min_price) : "–"}</td><td className="text-right">{p.max_discount_percent ? `${Number(p.max_discount_percent)}%` : "–"}</td><td className="text-right">{p.available === null ? "n/a" : Number(p.available)}</td>
-              <td className="text-right">{canManage && <Button variant="secondary" onClick={() => setEditing(p)}>{`Limits for ${p.name}`}</Button>}</td></tr>))}</tbody></table>
+              <td className="text-right">{canManage && <div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setEditing(p)}>{`Limits for ${p.name}`}</Button><Button variant="secondary" onClick={() => setBundling(p)}>{`Bundle for ${p.name}`}</Button></div>}</td></tr>))}</tbody></table>
       )}
       {editing && <ProfileDialog item={editing} onClose={() => setEditing(null)} />}
+      {bundling && <BundleDialog product={bundling} onClose={() => setBundling(null)} />}
     </>
   );
 }

@@ -290,3 +290,15 @@ def test_http_permissions_ext(world, idp, acme, f):
         assert api["aud"].get(f"/api/v1/supply-chain/analytics/{name}").status_code == 200, name
         assert api["emp"].get(f"/api/v1/supply-chain/analytics/{name}").status_code == 403
     assert api["aud"].get("/api/v1/supply-chain/analytics/nope").status_code == 404
+
+
+@pytest.mark.django_db
+def test_demand_rows_and_fulfilment_lines_carry_the_sku(f):
+    from modules.supply_chain import delivery as dv
+    from modules.supply_chain import views_ext as scx
+
+    w = f["widget"]
+    d = dm.create_demand(uid(f, "planner"), product_id=w.id, quantity=5, required_date=TODAY + timedelta(days=5), source="PROJECT", source_ref="PRJ-SKU")
+    assert scx._demand(m.Demand.objects.select_related("product").get(pk=d.id))["sku"] == w.sku
+    confirmed(f, [line(f, qty="3")])
+    assert all(ln["sku"] == w.sku for row in dv.fulfillment_board() for ln in row["lines"]) and dv.fulfillment_board()

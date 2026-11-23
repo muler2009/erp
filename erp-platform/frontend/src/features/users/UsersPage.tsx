@@ -16,6 +16,7 @@ import type { Membership } from "../../shared/api/types";
 import { formatDateTime } from "../../shared/lib/format";
 import { Can, useAccess } from "../../shared/permissions/usePermissions";
 import { Badge, Button, FormField, Modal, PageHeader, inputClass } from "../../shared/ui/primitives";
+import { RolesDialog } from "./RoleAssign";
 import { DataTable } from "../../shared/ui/DataTable";
 
 export const inviteSchema = z.object({
@@ -91,6 +92,7 @@ export function UsersPage() {
   const [deactivate] = useDeactivateUserMutation();
   const [reactivate] = useReactivateUserMutation();
   const [inviting, setInviting] = useState(false);
+  const [rolesFor, setRolesFor] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const { can } = useAccess();
 
@@ -113,6 +115,9 @@ export function UsersPage() {
         cell: ({ row }) => <Badge tone={row.original.status === "ACTIVE" ? "green" : "slate"}>{row.original.status}</Badge>,
       },
       { header: "Added", cell: ({ row }) => formatDateTime(row.original.created_at) },
+      ...(can("roles.assign")
+        ? [{ id: "roles", header: "Roles", cell: ({ row }: { row: { original: Membership } }) => <Button variant="secondary" aria-label={`Manage roles for ${row.original.display_name || row.original.email}`} onClick={() => setRolesFor(row.original.id)}>Manage roles</Button> } satisfies ColumnDef<Membership>]
+        : []),
       ...(can("users.deactivate")
         ? [
             {
@@ -163,6 +168,7 @@ export function UsersPage() {
         hasPrevious={cursor !== null}
         onFirst={() => setCursor(null)}
       />
+      {rolesFor && data?.results.find((m) => m.id === rolesFor) && <RolesDialog member={data.results.find((m) => m.id === rolesFor)!} onClose={() => setRolesFor(null)} />}
       <InviteDialog open={inviting} onClose={() => setInviting(false)} />
     </>
   );

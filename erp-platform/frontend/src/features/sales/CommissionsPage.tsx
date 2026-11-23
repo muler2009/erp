@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { useAssignCommissionPlanMutation, useCalculateCommissionMutation, useCommissionActionMutation, useCreateCommissionPlanMutation, useGetAttainmentQuery, useGetTeamAttainmentQuery, useListCommissionPlansQuery, useListCommissionStatementsQuery, useSetSalesTargetMutation } from "../../shared/api/endpoints";
 import { errorMessage } from "../../shared/api/errors";
-import type { CommissionStatementRow, CommissionTier } from "../../shared/api/types";
+import type { CommissionPlanRow, CommissionStatementRow, CommissionTier } from "../../shared/api/types";
 import { formatMoney } from "../../shared/lib/money";
 import { useAccess } from "../../shared/permissions/usePermissions";
 import { Badge, Button, Card, EmptyState, ErrorState, FormField, Modal, PageHeader, Spinner, inputClass } from "../../shared/ui/primitives";
@@ -106,13 +106,28 @@ function Plans() {
   const [assign] = useAssignCommissionPlanMutation();
   const people = useUserOptions(false);
   const [dlg, setDlg] = useState<"new" | "assign" | null>(null);
+  const [editing, setEditing] = useState<CommissionPlanRow | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const toggle = (p: CommissionPlanRow) => { setErr(null); create({ name: p.name, tiers: p.tiers, category_rates: p.category_rates, is_active: !p.is_active }).unwrap().catch((e) => setErr(errorMessage(e))); };
   return (
     <Card title="Commission plans" actions={<div className="flex gap-2"><Button variant="secondary" onClick={() => setDlg("assign")}>Give someone a plan</Button><Button onClick={() => setDlg("new")}>New plan</Button></div>}>
       {isLoading ? <Spinner /> : error ? <ErrorState error={error} onRetry={refetch} /> : !data?.length ? <EmptyState title="No commission plans yet" /> : (
         <ul className="space-y-3 text-sm">{data.map((p) => (
           <li key={p.id} className="rounded border border-slate-200 p-3"><p className="font-medium">{p.name} {!p.is_active && <Badge tone="slate">Inactive</Badge>}</p>
             <p className="text-slate-600">{p.tiers.map((t, i) => { const next = p.tiers[i + 1]; return `${formatMoney(t.from)}${next ? ` to ${formatMoney(next.from)}` : " and above"}: ${Number(t.rate)}%`; }).join(" · ")}</p>
-            {Object.keys(p.category_rates).length > 0 && <p className="text-slate-600">Special rates: {Object.entries(p.category_rates).map(([k, v]) => `${k} ${Number(v)}%`).join(", ")}</p>}</li>))}</ul>
+            {Object.keys(p.category_rates).length > 0 && <p className="text-slate-600">Special rates: {Object.entries(p.category_rates).map(([k, v]) => `${k} ${Number(v)}%`).join(", ")}</p>}
+            <div className="mt-2 flex gap-2"><Button variant="secondary" onClick={() => setEditing(p)}>{`Edit ${p.name}`}</Button><Button variant="secondary" onClick={() => toggle(p)}>{`${p.is_active ? "Deactivate" : "Activate"} ${p.name}`}</Button></div></li>))}</ul>
+      )}
+      {err && <p role="alert" className="mt-2 text-sm text-red-700">{err}</p>}
+      {editing && (
+        <ActionDialog title={`Edit plan: ${editing.name}`} cta="Save plan" open onClose={() => setEditing(null)}
+          initial={{ tiers: editing.tiers.map((t) => `${Number(t.from)}:${Number(t.rate)}`).join("\n"), cats: Object.entries(editing.category_rates).map(([k, v]) => `${k}:${Number(v)}`).join("\n") }}
+          fields={[{ name: "tiers", label: "Tiers — one per line as “sales from:percent”", required: true, type: "textarea" }, { name: "cats", label: "Special rates by product category — one per line as “Category:percent” (optional)", type: "textarea" }]}
+          submit={async (v) => {
+            const t = parseTiers(v.tiers ?? ""); if ("problem" in t) throw new Error(t.problem);
+            const c = parseCategoryRates(v.cats ?? ""); if ("problem" in c) throw new Error(c.problem);
+            await create({ name: editing.name, tiers: t.tiers, category_rates: c.rates, is_active: editing.is_active }).unwrap();
+          }} />
       )}
       {dlg === "new" && (
         <ActionDialog title="New commission plan" cta="Create plan" open onClose={() => setDlg(null)}
@@ -121,6 +136,7 @@ function Plans() {
           submit={async (v) => {
             const t = parseTiers(v.tiers ?? ""); if ("problem" in t) throw new Error(t.problem);
             const c = parseCategoryRates(v.cats ?? ""); if ("problem" in c) throw new Error(c.problem);
+            if ((data ?? []).some((x) => x.name.toLowerCase() === v.name!.trim().toLowerCase())) throw new Error("A plan with this name already exists. Use Edit on that plan instead.");
             await create({ name: v.name!.trim(), tiers: t.tiers, category_rates: c.rates, is_active: true }).unwrap();
           }} />
       )}

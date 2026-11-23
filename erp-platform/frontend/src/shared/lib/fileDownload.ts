@@ -30,3 +30,13 @@ export async function downloadFromApi(path: string, name: string): Promise<void>
   a.click();
   URL.revokeObjectURL(href);
 }
+
+/** Opens an HTML page served from an API path (needs the bearer token) in a new tab, e.g. a printable document. */
+export async function openFromApi(path: string): Promise<void> {
+  const token = await getAccessToken();
+  const res = await fetch(path, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  if (!res.ok) throw new Error("The document could not be opened. You may not have access to it.");
+  const href = URL.createObjectURL(new Blob([await res.text()], { type: "text/html" }));
+  window.open(href, "_blank", "noopener");
+  setTimeout(() => URL.revokeObjectURL(href), 60_000);
+}

@@ -4,6 +4,8 @@ import { useCreateAssetCategoryMutation, useCreateAssetLocationMutation, useList
 import { formatMoney, parseMoney } from "../../shared/lib/money";
 import { Can } from "../../shared/permissions/usePermissions";
 import { Badge, Button, Card, EmptyState, ErrorState, PageHeader, Spinner } from "../../shared/ui/primitives";
+import type { AssetCategory } from "../../shared/api/types";
+import { CategoryEditDialog } from "./AssetTools";
 import { ActionDialog } from "../hr/ActionDialog";
 import { pretty } from "../hr/EmployeeDialogs";
 
@@ -27,19 +29,21 @@ export function AssetSetupPage() {
   const [createCat] = useCreateAssetCategoryMutation();
   const [createLoc] = useCreateAssetLocationMutation();
   const [dlg, setDlg] = useState<"cat" | "loc" | null>(null);
+  const [editing, setEditing] = useState<AssetCategory | null>(null);
   return (
     <>
       <PageHeader title="Asset setup" description="Categories drive depreciation and tracking rules; locations say where assets are." />
       <Card title="Categories">
         <Can permission="assets.category.manage"><div className="mb-2"><Button variant="secondary" onClick={() => setDlg("cat")}>New category</Button></div></Can>
         {cats.isLoading ? <Spinner /> : cats.error ? <ErrorState error={cats.error} onRetry={cats.refetch} /> : !cats.data?.results.length ? <EmptyState title="No categories yet" /> : (
-          <ul className="text-sm">{cats.data.results.map((c) => <li key={c.id} className="border-b border-slate-100 py-1">{c.code} — {c.name} · {pretty(c.asset_class)} · {c.depreciation_method === "NON" ? "not depreciated" : `${pretty(c.depreciation_method === "SL" ? "straight_line" : "reducing_balance")} over ${c.useful_life_months} months`} · threshold {formatMoney(c.capitalization_threshold)} {!c.is_active && <Badge tone="slate">Inactive</Badge>}</li>)}</ul>
+          <ul className="text-sm">{cats.data.results.map((c) => <li key={c.id} className="border-b border-slate-100 py-1">{c.code} — {c.name} · {pretty(c.asset_class)} · {c.depreciation_method === "NON" ? "not depreciated" : `${pretty(c.depreciation_method === "SL" ? "straight_line" : "reducing_balance")} over ${c.useful_life_months} months`} · threshold {formatMoney(c.capitalization_threshold)} {!c.is_active && <Badge tone="slate">Inactive</Badge>} <Can permission="assets.category.manage"><Button variant="secondary" aria-label={`Edit category ${c.code}`} onClick={() => setEditing(c)}>Edit</Button></Can></li>)}</ul>
         )}
       </Card>
       <div className="mt-4"><Card title="Locations">
         <Can permission="assets.location.manage"><div className="mb-2"><Button variant="secondary" onClick={() => setDlg("loc")}>New location</Button></div></Can>
         {locs.isLoading ? <Spinner /> : locs.error ? <ErrorState error={locs.error} onRetry={locs.refetch} /> : !locs.data?.results.length ? <EmptyState title="No locations yet" /> : <ul className="text-sm">{locs.data.results.map((l) => <li key={l.id} className="border-b border-slate-100 py-1">{l.code} — {l.name}</li>)}</ul>}
       </Card></div>
+      {editing && <CategoryEditDialog key={editing.id} category={editing} onClose={() => setEditing(null)} />}
       <ActionDialog title="New asset category" open={dlg === "cat"} onClose={() => setDlg(null)} cta="Create category"
         fields={[{ name: "code", label: "Code", required: true }, { name: "name", label: "Name", required: true }, { name: "asset_class", label: "Class", required: true, options: ASSET_CLASSES.map((c) => [c, pretty(c)] as [string, string]) }, { name: "depreciation_method", label: "Depreciation", required: true, options: METHODS }, { name: "useful_life_months", label: "Useful life (months)" }, { name: "residual_percent", label: "Residual %" }, { name: "reducing_rate_percent", label: "Annual rate % (reducing balance)" }, { name: "capitalization_threshold", label: "Capitalisation threshold" }, { name: "requires_serial", label: "Serial number required", options: [["no", "No"], ["yes", "Yes"]] }]}
         submit={async (v) => {

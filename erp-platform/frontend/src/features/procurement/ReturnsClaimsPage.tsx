@@ -7,6 +7,7 @@ import { formatMoney } from "../../shared/lib/money";
 import { useAccess } from "../../shared/permissions/usePermissions";
 import { Badge, Button, Card, EmptyState, ErrorState, FormField, Modal, PageHeader, Spinner, inputClass } from "../../shared/ui/primitives";
 import { ActionDialog } from "../hr/ActionDialog";
+import { ReturnsSummary } from "./ProcurementTools";
 
 type Tone = "green" | "red" | "amber" | "slate";
 export const RETURN_STATUS: Record<SupplierReturnRow["status"], { label: string; tone: Tone }> = { DRAFT: { label: "Waiting for approval", tone: "amber" }, APPROVED: { label: "Approved — not yet sent", tone: "amber" }, DISPATCHED: { label: "Sent back", tone: "amber" }, CREDITED: { label: "Credited", tone: "green" }, CLOSED: { label: "Closed", tone: "green" }, CANCELLED: { label: "Cancelled", tone: "slate" } };
@@ -166,13 +167,13 @@ function Claims() {
 }
 
 export function ReturnsClaimsPage() {
-  const [tab, setTab] = useState<"returns" | "claims">("returns");
-  const tabs: ["returns" | "claims", string][] = [["returns", "Returns"], ["claims", "Claims"]];
+  const [tab, setTab] = useState<"returns" | "claims" | "summary">("returns");
+  const tabs: ["returns" | "claims" | "summary", string][] = [["returns", "Returns"], ["claims", "Claims"], ["summary", "Summary"]];
   return (
     <div>
       <PageHeader title="Returns and claims" description="Sending goods back to suppliers and claiming what they owe." />
       <div role="tablist" className="mb-4 flex border-b border-slate-200">{tabs.map(([k, l]) => <button key={k} role="tab" aria-selected={k === tab} onClick={() => setTab(k)} className={`px-3 py-2 text-sm ${k === tab ? "border-b-2 border-indigo-600 font-medium text-indigo-700" : "text-slate-600 hover:text-slate-900"}`}>{l}</button>)}</div>
-      {tab === "returns" ? <Returns /> : <Claims />}
+      {tab === "returns" ? <Returns /> : tab === "claims" ? <Claims /> : <ReturnsSummary />}
     </div>
   );
 }

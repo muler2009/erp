@@ -12,7 +12,10 @@ import { DocumentsPage, fileProblem, flags } from "./DocumentsPage";
 
 const server = setupServer();
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
-beforeEach(() => vi.spyOn(auth, "getAccessToken").mockResolvedValue("tok"));
+beforeEach(() => {
+  vi.spyOn(auth, "getAccessToken").mockResolvedValue("tok");
+  server.use(http.get("*/api/v1/documents/saved-searches", () => HttpResponse.json([])), http.get("*/api/v1/documents/favourites", () => HttpResponse.json({ results: [], next: null, previous: null })));
+});
 afterEach(() => { server.resetHandlers(); vi.restoreAllMocks(); });
 afterAll(() => server.close());
 

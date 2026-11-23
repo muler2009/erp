@@ -23,7 +23,7 @@ def _range(request):
 
 
 def _demand(d):
-    return {"id": str(d.id), "product": str(d.product_id), "warehouse": _s(d.warehouse_id), "source": d.source, "source_ref": d.source_ref, "customer": d.customer, "kind": d.kind, "quantity": str(d.quantity), "required_date": str(d.required_date),
+    return {"id": str(d.id), "product": str(d.product_id), "sku": d.product.sku, "warehouse": _s(d.warehouse_id), "source": d.source, "source_ref": d.source_ref, "customer": d.customer, "kind": d.kind, "quantity": str(d.quantity), "required_date": str(d.required_date),
             "priority": d.priority, "status": d.status, "revision": d.revision, "approved_by": _s(d.approved_by), "cancel_reason": d.cancel_reason}
 
 
@@ -71,7 +71,7 @@ class Demands(_V):
     write = "supply_chain.demand.manage"
 
     def get(self, request):
-        qs = m.Demand.objects.all()
+        qs = m.Demand.objects.select_related("product")
         for k in ("status", "source", "kind", "product"):
             v = request.query_params.get(k)
             if v:

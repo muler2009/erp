@@ -69,14 +69,14 @@ def fulfillment_board():
     board = []
     for o in sm.SalesOrder.objects.filter(status__in=("CONFIRMED", "PARTIALLY_DELIVERED")).select_related("account").order_by("order_date"):
         lines, short_lines = [], 0
-        for ln in o.lines.filter(product__isnull=False):
+        for ln in o.lines.filter(product__isnull=False).select_related("product"):
             open_q = ln.quantity - ln.delivered_quantity
             if open_q <= 0:
                 continue
             res = sm.OrderReservation.objects.filter(order_line=ln).values_list("quantity", flat=True).first() or ZERO
             short = max(open_q - res, ZERO)
             short_lines += 1 if short > 0 else 0
-            lines.append({"line": ln.line_no, "product": str(ln.product_id), "open": str(open_q), "reserved": str(res), "short": str(short)})
+            lines.append({"line": ln.line_no, "product": str(ln.product_id), "sku": ln.product.sku, "open": str(open_q), "reserved": str(res), "short": str(short)})
         if not lines:
             continue
         deliveries = list(sm.Delivery.objects.filter(order=o, status="DISPATCHED").values_list("id", flat=True))

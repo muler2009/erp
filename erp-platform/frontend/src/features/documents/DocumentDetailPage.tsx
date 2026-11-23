@@ -7,6 +7,7 @@ import type { DocDetail, DocVersion } from "../../shared/api/types";
 import { downloadFromApi } from "../../shared/lib/fileDownload";
 import { Badge, Button, Card, EmptyState, ErrorState, FormField, Modal, PageHeader, Spinner, inputClass } from "../../shared/ui/primitives";
 import { ActionDialog } from "../hr/ActionDialog";
+import { DocumentTools } from "./DocumentTools";
 import { useUserNames } from "../quality/names";
 import { fileProblem, flags, statusOf } from "./DocumentsPage";
 
@@ -111,6 +112,7 @@ export function DocumentDetailPage() {
             <tr key={v.id} className="border-t border-slate-100 align-top"><td className="py-1">{v.label}</td><td><Badge tone={VERSION_STATUS[v.status].tone}>{VERSION_STATUS[v.status].label}</Badge>{v.rejection_note && <p className="text-xs text-red-700">{v.rejection_note}</p>}</td><td>{v.file_name} <span className="text-slate-500">({sizeText(v.size)})</span></td><td>{v.change_reason || "–"}</td>
               <td className="flex justify-end gap-2 py-1"><Button variant="secondary" onClick={() => download(v)}>{`Download ${v.label}`}</Button>{versionActions(v, can).map((a) => <Button key={a} variant={a === "withdraw" ? "secondary" : "primary"} onClick={() => setPending({ id: v.id, action: a })}>{`${ACTION_TEXT[a]} ${v.label}`}</Button>)}</td></tr>))}</tbody></table>
       </Card>
+      <DocumentTools doc={data} />
       <Comments id={id} />
       {data.history && data.history.length > 0 && <Card title="History"><ul className="text-sm">{data.history.map((h, i) => <li key={i}>{new Date(h.at).toLocaleString()} · {h.action.toLowerCase().replace(/_/g, " ")}{h.version && ` ${h.version}`} · {h.by ? nameOf(h.by) : "system"}{h.note && ` — ${h.note}`}</li>)}</ul></Card>}
       {data.related.length > 0 && <Card title="Related documents"><ul className="text-sm">{data.related.map((r) => <li key={r.id}><Link className="text-indigo-700 underline" to={`/app/documents/${r.id}`}>{r.reference} {r.title}</Link></li>)}</ul></Card>}

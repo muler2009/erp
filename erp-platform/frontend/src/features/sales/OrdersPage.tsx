@@ -8,6 +8,7 @@ import { formatMoney } from "../../shared/lib/money";
 import { useAccess } from "../../shared/permissions/usePermissions";
 import { DataTable } from "../../shared/ui/DataTable";
 import { DispatchDialog } from "./DispatchDialog";
+import { OrderTools } from "./OrderTools";
 import { useAccountNames } from "../../shared/ui/useAccountNames";
 import { Badge, Button, Modal, PageHeader, Spinner, inputClass } from "../../shared/ui/primitives";
 
@@ -50,6 +51,7 @@ function Detail({ id, onClose }: { id: string | null; onClose: () => void }) {
             <div className="flex justify-between font-semibold"><dt>Total ({data.currency})</dt><dd>{formatMoney(data.total)}</dd></div>
           </dl>
           {data.status === "PENDING_APPROVAL" && data.workflow_instance_id && <p className="mt-2 text-sm text-slate-600">Waiting in the approvals workflow.</p>}
+          <OrderTools order={data} />
           {err && <p role="alert" className="mt-3 text-sm text-red-700">{err}</p>}
           <div className="mt-4 flex flex-wrap justify-end gap-2">
             {orderActions(data.status, can).map((a) => <Button key={a.action} variant={a.variant ?? "primary"} loading={state.isLoading} onClick={() => void run(a.action)}>{a.text}</Button>)}

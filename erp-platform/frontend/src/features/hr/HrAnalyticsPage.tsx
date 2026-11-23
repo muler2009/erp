@@ -1,12 +1,43 @@
 import { useState } from "react";
 
-import { useGetHrDashboardQuery } from "../../shared/api/endpoints";
+import { useGetHeadcountByStatusQuery, useGetHrDashboardQuery, useGetPerformanceAnalyticsQuery, useListCyclesQuery } from "../../shared/api/endpoints";
 import { formatMoney } from "../../shared/lib/money";
 import { Card, ErrorState, PageHeader, Spinner, inputClass } from "../../shared/ui/primitives";
 import { pretty } from "./EmployeeDialogs";
 
 function Counts({ data }: { data: Record<string, number> }) {
   return <ul className="text-sm">{Object.entries(data).map(([k, v]) => <li key={k} className="flex justify-between border-b border-slate-100 py-1"><span>{pretty(k)}</span><strong>{v}</strong></li>)}</ul>;
+}
+
+export function Performance() {
+  const cycles = useListCyclesQuery();
+  const [cycle, setCycle] = useState("");
+  const q = useGetPerformanceAnalyticsQuery(cycle, { skip: !cycle });
+  return (
+    <Card title="Performance ratings">
+      <label className="mb-2 block text-sm">Review cycle <select aria-label="Review cycle" className={inputClass} value={cycle} onChange={(e) => setCycle(e.target.value)}><option value="">Choose…</option>{(cycles.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+      {q.isFetching && <Spinner />}
+      {q.error && <ErrorState error={q.error} onRetry={q.refetch} />}
+      {q.data && !q.isFetching && (
+        <>
+          <p className="mb-2 text-sm">{q.data.completed} of {q.data.reviews} review(s) completed.</p>
+          <ul aria-label="Rating distribution" className="text-sm">{Object.entries(q.data.rating_distribution).map(([k, v]) => <li key={k} className="flex justify-between border-b border-slate-100 py-1"><span>Rating {k}</span><strong>{v}</strong></li>)}</ul>
+        </>
+      )}
+    </Card>
+  );
+}
+
+function HeadcountStatus() {
+  const q = useGetHeadcountByStatusQuery();
+  return (
+    <Card title="Headcount by department and status">
+      {q.isLoading ? <Spinner /> : q.error ? <ErrorState error={q.error} onRetry={q.refetch} /> : (q.data ?? []).length === 0 ? <p className="text-sm text-slate-500">No employees.</p> : (
+        <table className="w-full text-sm"><caption className="sr-only">Headcount by department and status</caption><thead><tr className="text-left text-slate-500"><th>Department</th><th>Status</th><th className="text-right">People</th></tr></thead>
+          <tbody>{q.data!.map((r) => <tr key={`${r.department}-${r.status}`} className="border-t border-slate-100"><td>{r.department}</td><td>{pretty(r.status)}</td><td className="text-right">{r.count}</td></tr>)}</tbody></table>
+      )}
+    </Card>
+  );
 }
 
 export function HrAnalyticsPage() {
@@ -27,6 +58,7 @@ export function HrAnalyticsPage() {
           {data.payroll_cost && <Card title="Payroll cost"><table className="w-full text-sm"><caption className="sr-only">Payroll cost by month</caption><thead><tr className="text-left"><th>Month</th><th>Gross</th><th>Employer cost</th><th>Net</th></tr></thead><tbody>{data.payroll_cost.map((r) => <tr key={r.month} className="border-t border-slate-100"><td>{r.month}</td><td>{formatMoney(r.gross)}</td><td>{formatMoney(r.employer_cost)}</td><td>{formatMoney(r.net)}</td></tr>)}</tbody></table></Card>}
         </div>
       )}
+      <div className="mt-4 grid gap-4 md:grid-cols-2"><Performance /><HeadcountStatus /></div>
     </>
   );
 }

@@ -8,6 +8,8 @@ import type { DirectoryUser, ProjectTask } from "../../shared/api/types";
 import { formatMoney, parseMoney } from "../../shared/lib/money";
 import { Badge, Button, Card, EmptyState, ErrorState, FormField, Modal, PageHeader, Spinner, inputClass } from "../../shared/ui/primitives";
 import { UserPicker } from "../../shared/ui/UserPicker";
+import { TaskDeleteDialog, TaskEditDialog } from "./TaskEdit";
+import { HealthCard } from "./HealthPortfolio";
 import { pretty, statusTone } from "./ProjectsPage";
 
 /** Allowed next statuses; the server owns the rules and refuses anything else. */
@@ -100,6 +102,8 @@ export function ProjectPage() {
   const tasks = useListProjectTasksQuery(id);
   const [adding, setAdding] = useState(false);
   const [progress, setProgress] = useState<ProjectTask | null>(null);
+  const [editing, setEditing] = useState<ProjectTask | null>(null);
+  const [deleting, setDeleting] = useState<ProjectTask | null>(null);
   const [moveTo, setMoveTo] = useState<string | null>(null);
   if (project.isLoading) return <Spinner />;
   if (project.error || !project.data) return <ErrorState error={project.error} onRetry={() => void project.refetch()} />;
@@ -111,17 +115,20 @@ export function ProjectPage() {
       <ProjectNav id={id} current="" />
       <p className="mb-3"><Badge tone={statusTone(p.status)}>{pretty(p.status)}</Badge></p>
       {p.description && <p className="mb-4 text-sm">{p.description}</p>}
+      <HealthCard id={id} />
       <Card title="Tasks">
         {tasks.isLoading ? <Spinner /> : tasks.error ? <ErrorState error={tasks.error} onRetry={() => void tasks.refetch()} /> : tasks.data!.results.length === 0 ? <EmptyState title="No tasks yet" /> : (
           <table className="w-full text-sm">
             <thead><tr className="text-left"><th>WBS</th><th>Task</th><th>Planned</th><th className="text-right">Hours</th><th className="text-right">Done</th><th>Status</th><th /></tr></thead>
             <tbody>{tasks.data!.results.map((t) => (
               <tr key={t.id} className="border-t border-slate-100"><td>{t.wbs}</td><td>{t.milestone ? "◆ " : ""}{t.name}</td><td>{t.planned_start} to {t.planned_end}</td><td className="text-right">{formatMoney(t.planned_hours)}</td><td className="text-right">{formatMoney(t.percent_complete)}%</td><td>{pretty(t.status)}</td>
-                <td>{!["DONE", "CANCELLED"].includes(t.status) && p.status === "ACTIVE" && <Button variant="secondary" onClick={() => setProgress(t)}>Update progress</Button>}</td></tr>
+                <td className="space-x-1">{!["DONE", "CANCELLED"].includes(t.status) && p.status === "ACTIVE" && <Button variant="secondary" onClick={() => setProgress(t)}>Update progress</Button>}{!["DONE", "CANCELLED"].includes(t.status) && !["COMPLETED", "CANCELLED"].includes(p.status) && <Button variant="secondary" aria-label={`Edit task ${t.wbs}`} onClick={() => setEditing(t)}>Edit</Button>}{t.status === "TODO" && Number(t.percent_complete) === 0 && !["COMPLETED", "CANCELLED"].includes(p.status) && <Button variant="secondary" aria-label={`Delete task ${t.wbs}`} onClick={() => setDeleting(t)}>Delete</Button>}</td></tr>
             ))}</tbody>
           </table>
         )}
       </Card>
+      {editing && <TaskEditDialog key={editing.id} task={editing} summary={tasks.data!.results.some((x) => x.parent === editing.id)} onClose={() => setEditing(null)} />}
+      {deleting && <TaskDeleteDialog task={deleting} onClose={() => setDeleting(null)} />}
       {adding && <NewTaskDialog project={id} open onClose={() => setAdding(false)} />}
       {progress && <ProgressDialog key={progress.id} task={progress} onClose={() => setProgress(null)} />}
       <StatusDialog id={id} current={p.status} to={moveTo} onClose={() => setMoveTo(null)} />

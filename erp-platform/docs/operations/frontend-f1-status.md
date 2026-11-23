@@ -813,3 +813,316 @@ Run on 2026-11-15 without Docker: Keycloak 26 from the release tarball, the Djan
 - Server remains authoritative (sealed bids, committee quorum, creator cannot award); the UI shows the server's message.
 - Tests: `features/procurement/tenders.test.tsx` (11).
 - Not done: RFQ clarifications, single-source PO, tender editing while in draft, attachments on tenders.
+
+## F75 — RFQ clarifications, single-source orders, printable PO
+- RFQ detail: clarifications panel (post question to one/all suppliers, answer pending questions); needs `procurement.rfq.manage`.
+- `/app/procurement/single-source`: report of orders placed without competition; create form with mandatory justification (≥20 chars, server enforces).
+- Purchase order detail: "Print order" opens a self-contained, HTML-escaped document in a new window and calls print (user can save as PDF). If pop-ups are blocked an error is shown.
+- Tests: `sourcingExtras.test.tsx` (7); `rfq.test.tsx` updated for the new request.
+- Not done: procurement settings, supplier document attachments, product price history; print layout not checked in a real browser.
+
+## F76 — Inventory stock control and traceability
+- `/app/inventory/stock-control` (tabs): alerts (out of stock, below safety/minimum, reorder, above maximum, discontinued, expired/expiring lots), needs-reordering list + set a reorder rule (`inventory.product.manage`), ageing buckets, slow-moving/obsolete + excess (days adjustable), expired stock on hand.
+- `/app/inventory/traceability`: lot trace (where it is, received, issued), change lot status (available/quarantined/blocked/recalled; note required unless available; `inventory.stock.adjust`), serial number lookup.
+- Tests: `features/inventory/stockControl.test.tsx` (8).
+- Not done in Inventory: adjustment requests and approval policy, material requisitions, landed costs, FEFO pick suggestions, inventory reports/exports, UoM conversions, item categories, location utilisation.
+
+## F77 — Inventory adjustments and landed costs
+- `/app/inventory/adjustments`: list with status filter and paging; request an adjustment (product, non-blocked location, change or counted quantity, lot, unit cost for found stock, reason type + explanation); approve / reject (reject needs a reason; the server blocks approving your own request); attach evidence file; show and edit the approval limit (empty = every adjustment waits for approval).
+- `/app/inventory/landed-costs`: list with per-item allocation (to stock vs cost of sales); add a landed cost against a receipt (type + number, amount, description, share by value or quantity).
+- Tests: `features/inventory/adjustments.test.tsx` (11).
+- Not done in Inventory: material requisitions (next), FEFO pick suggestions, inventory reports/exports, UoM conversions, item categories, location utilisation.
+
+## F78 — Inventory material requisitions (`/app/inventory/requisitions`)
+- List with status filter/paging; create (warehouse, destination type + reference, purpose, needed-by, items); detail with per-line asked/issued/returned and stock available; submit / cancel (creator), approve / reject with reason (approver), issue everything available from a location of the requisition's warehouse (with "received by"), return issued items against a voucher line (limited to what is still out), close a partly issued requisition.
+- Not done: choosing per-line issue quantities or lots (the server issues everything outstanding that is on hand); backorder view.
+- Tests: `features/inventory/materialRequisitions.test.tsx` (8).
+- Remaining Inventory: FEFO pick suggestions, inventory reports/exports, UoM conversions, item categories, location utilisation.
+
+## F79 — Inventory reports, utilisation, pick suggestions, item setup
+- `/app/inventory/reports`: stock summary (by warehouse/location/category), movements, stock card (needs a product), ABC, turnover, adjustments (with by-reason totals), transfers; date/warehouse/look-back filters; CSV download uses the same filters (authenticated fetch). Location utilisation table. "Which lots to pick" suggestion (FEFO/FIFO, read-only; issues nothing).
+- `/app/inventory/item-setup`: item categories (with parent) and units of measure with conversions and a try-a-conversion tool; forms need `inventory.product.manage`.
+- Tests: `features/inventory/inventoryReports.test.tsx` (8).
+- Inventory frontend now covers every backend area except: per-product UoM conversion override in the form (API supports it), editing/deactivating categories (API has no such endpoints).
+- Not checked in a real browser: CSV download, table widths.
+
+## F80 — Manufacturing master data (first Manufacturing slice)
+- `/app/manufacturing/work-centers`: list/paging; create, edit (capacity, efficiency, labour/machine/overhead rates), activate/deactivate (`manufacturing.master.manage`).
+- `/app/manufacturing/boms`: list with status filter; detail (components with scrap and substitutes count, routing steps, quality checks, standard cost); create and edit a draft (components via product picker, routing steps with work centres, quality checks); approve (`manufacturing.bom.approve`; the server blocks approving your own); create a new version; archive; "materials needed" multi-level calculator for a quantity.
+- Editing a draft sends existing substitutes back unchanged so they are not lost; by-products and effective dates are not editable here (the PATCH leaves them as they are).
+- Tests: `features/manufacturing/masterData.test.tsx` (9).
+- Not done in Manufacturing (next slices): production orders (create/release/issue/operations/checks/scrap/receive/cost), planning (MRP preview, plans), schedule/load/WIP reports, downtime/maintenance, analytics, substitutes and by-product editing, item supply profile.
+
+## F81 — Manufacturing production orders (`/app/manufacturing/orders`)
+- List with status filter/paging; create (product with approved BOM, quantity, finished-goods location, planned dates).
+- Detail: materials (needed/issued/returned/short), operations, quality checks, receipts, cost (shown once in progress).
+- Actions (each shown by status and permission; the server enforces state and separation of duties): approve, release, issue all materials, issue / return one material (with lot), start operation, finish operation (hours, good/defective/rework), record quality check (pass/fail/conditional), report scrap (output or material, reason required), receive output (lot, expiry), put on hold (reason), resume, complete with what was made, close, cancel.
+- Tests: `features/manufacturing/productionOrders.test.tsx` (9).
+- Not done in Manufacturing: operation pause/resume/approve, rework time/finish, by-product recording, priority/reschedule, MRP preview and plans, schedule/load/WIP reports, downtime and maintenance requests, analytics, receipt disposition.
+
+## F82 — Manufacturing plans and planning/capacity
+- `/app/manufacturing/plans`: list; create a plan (period, lines; "Fill from demand" uses the server's suggestion); detail with lines and revision history; feasibility check (material shortages, capacity bottlenecks); approve (`manufacturing.plan.approve`, server blocks approving your own); release to production orders at a chosen location; cancel with reason.
+- `/app/manufacturing/planning` (tabs): MRP what-if (demands → make/buy with dates; creates nothing), capacity (work-centre load for a date range + days over capacity), schedule, work in progress value + age of open orders.
+- Tests: `features/manufacturing/planning.test.tsx` (10).
+- Not done in Manufacturing: plan revision (edit lines of an approved plan), operation pause/resume/approve, rework, by-products, priority/reschedule, downtime and maintenance requests, manufacturing analytics reports (plan-vs-actual, efficiency, scrap, cost…), receipt disposition, item supply profile.
+
+## F83 — Manufacturing shop-floor extras
+Implemented (production order detail): pause (with reason) / resume / approve per operation (Finish hidden while paused; Approve needs `manufacturing.operation.approve`); change priority (1–5) and reschedule for open orders; record by-product / recovered material (product, quantity, value, kind, decision, lot); quality-hold decision on receipts (release to a location / scrap / rework, with note; needs `manufacturing.disposition.approve`); rework orders: book rework time and finish rework.
+Backend: `_order` detail now also returns operation `is_paused`/`approved`, receipt `id`/`status`, order `priority`/`is_rework`; covered by `test_order_detail_exposes_pause_approval_receipt_and_priority_fields`.
+Tests: `shopFloor.test.tsx` (10). Not done: downtime / maintenance requests, manufacturing analytics reports, plan revision, BOM substitutes/by-product editing, item supply profile, production lines.
+
+## F84 — Manufacturing downtime, maintenance requests and reports
+Implemented: `/app/manufacturing/downtime` (list with paging, record stoppage, end stoppage, request maintenance which raises a breakdown with Asset Management and lists affected open orders; write actions need `manufacturing.downtime.manage`); `/app/manufacturing/reports` (16 period reports from `analytics/<name>`: plan vs actual, orders by status, output, efficiency, utilisation, OEE, bottlenecks, downtime, consumption, scrap, rework, quality rejection, cost, cost by line, labour productivity, on-time — shown as a generic table/summary with from–to validation).
+Backend: unchanged. The analytics endpoint has no CSV export, so none is offered.
+Tests: `downtimeReports.test.tsx` (8). Not done: plan revision, BOM substitutes/by-product editing, item supply profile, production lines, WIP-aging view on the reports page.
+
+## F85 — Manufacturing master-data leftovers
+Implemented: BOM editor now edits substitutes per component (add/ratio/remove), by-products and effective-from/until dates, with validation; plan revision (edit quantities/dates/lines + mandatory reason, shown for draft/approved plans with `manufacturing.plan.manage`); `/app/manufacturing/lines` — production lines list/add and item supply profile (made in-house / subcontracted / bought in, drawing ref, method notes).
+Backend fixes: `PATCH boms/<id>` ignored `byproducts` and the effective window (service supported them, view did not pass them) — now passed (omitted keys leave values alone, null clears); BOM detail also returns `sku` on substitutes and by-products. Test: `test_http_patch_draft_bom_saves_byproducts_and_effective_window` (+ existing http extension test) passed.
+Limits: item profile is write-only (no read endpoint), so the form cannot show the current value; no edit/deactivate for production lines (backend has none).
+Tests: `setupExtras.test.tsx` (10). Manufacturing frontend is now feature-complete against the audit list except a WIP-aging view on the reports page.
+
+## F86 — Supply Chain: logistics
+Implemented: `/app/supply-chain/shipments` (list with status/kind filters and paging; create — route pre-fills places and carrier; detail with items, tracking history, costs and problems; dispatch, tracking update, confirm delivery with per-item received/damaged quantities and receiver, add cost, report a problem, cancel with reason); `/app/supply-chain/carriers` (carriers list/add/activate/deactivate, routes list/add); `/app/supply-chain/logistics-reports` (open delivery problems with resolve; cost, carrier-performance and supplier-delivery reports for a period). Write actions need `supply_chain.logistics.manage`.
+Backend: shipment detail now returns each item's `id` (delivery needs it). Test: `test_shipment_detail_exposes_line_ids_usable_for_delivery` (+ lifecycle test) passed.
+Shared: `ReportTable` moved to `shared/ui/ReportTable` and now renders nested lists as sub-tables.
+Tests: `logistics.test.tsx` (13).
+Not done in Supply Chain: demand forecasts & replenishment suggestions, supply plans & demand consolidation, risks/disruptions/critical materials/alternative sources, vehicles/consolidation/availability by warehouse, fulfilment board, supply-chain analytics; shipments linked to a sales delivery / PO / transfer cannot be created from those documents here (free-form shipments only); proof-of-delivery file upload.
+
+## F87 — Supply Chain: forecasts and replenishment
+Implemented: `/app/supply-chain/forecasts` (list per product/all, set a forecast, generate from sales history, approve/revoke with the server's separation-of-duties message, forecast-accuracy card); `/app/supply-chain/replenishment` (run planning; open suggestions → create purchase requisition (buy) or production order (make, with location), dismiss with reason, adjust quantity/date with reason; supply plans list and detail with demand-vs-supply balance, change history, approve).
+Backend: forecast rows now include `sku`. Test: `test_forecast_rows_carry_the_product_sku` (+ forecast history test) passed.
+Tests: `planning.test.tsx` (12).
+Not done in Supply Chain: demands & consolidation, risks/disruptions/critical materials/alternative sources, vehicles/consolidation/availability, fulfilment board, analytics, shipment creation from documents, proof-of-delivery upload.
+
+## F88 — Supply Chain: risks
+Implemented: `/app/supply-chain/risks` with four tabs — risk register (list/filter, log a risk, detail with status change, mitigation actions add/complete, linked disruptions); disruptions (history, record, resolve); critical materials (sourcing coverage, mark critical, add alternative source); warning signals (automatic: late POs, delivery-delay risk, projected shortage, late shipments, under-sourced critical materials). Write actions need `supply_chain.risk.manage`; owners/responsibles chosen from active employees with user accounts.
+Backend: unchanged. Tests: `risks.test.tsx` (7).
+Limits: risk supplier/product links are not settable in the log form (API supports them); disruptions are not filterable by date (API supports from/to); alternative-source rows are not listed separately (only counted).
+Not done in Supply Chain: demands & consolidation, vehicles/consolidation of shipments/availability by warehouse, fulfilment board, analytics reports page, shipment creation from documents, proof-of-delivery upload.
+
+## F89 — Supply Chain: demands, vehicles, consolidation, fulfilment, analytics
+
+New: `DemandsPage` (list/filter, add, detail with revision history, planning-impact check, approve/revise/cancel, consolidated view with date range), `VehiclesPage`, `FulfilmentPage` (order board + stock by warehouse), `SupplyAnalyticsPage` (17 reports). `ShipmentsPage` gained assign vehicle, add shipment to a load, separate from a load. Routes under `/app/supply-chain/{demands,fulfilment,vehicles,analytics}`.
+
+Backend: demand rows and fulfilment-board lines now carry `sku` (test `test_demand_rows_and_fulfilment_lines_carry_the_sku`).
+
+Tests: `demandsFleet.test.tsx` (13 tests). Full frontend suite 915/915 in 96 files; build ok; npm audit 0 vulnerabilities.
+
+Still open in Supply Chain: creating shipments from a sales delivery / purchase order / transfer, proof-of-delivery upload.
+
+## F90 — Business intelligence: Reports (build, save, download, schedule, history)
+
+New `features/analytics/ReportsPage.tsx`, route `/app/analytics/reports`, menu "Reports" (analytics.view).
+- Build a report: data-set catalog limited to what the user may see; period or custom dates and the data set's own parameters; filters (7 conditions), sort, column choice (columns known after a first run); first 1000 rows shown with a cut-off notice; CSV/Excel/PDF download (analytics.export); "Save as report" (private or shared).
+- Saved reports: run, download, schedule, archive (server enforces ownership).
+- Schedules (analytics.export): list, send now, stop/resume. Create via the saved-report "Schedule" dialog (daily/weekly/monthly, file type, recipients from active employees).
+- History: run log with cursor paging and stored-file download.
+Tests: `features/analytics/reports.test.tsx` (9). Full suite 924/924 in 97 files; build ok; audit 0 vulnerabilities. No backend change.
+Not done: editing an existing schedule's frequency/recipients (stop and recreate instead); editing a saved report; real-browser check of downloads. KPI management and dashboard editing are slice 91.
+
+## F91 — Business intelligence: KPIs and dashboard editing
+
+New `features/analytics/KpisPage.tsx` (route `/app/analytics/kpis`, menu "KPIs") and `DashboardEditor.tsx`; `DashboardPage` extended.
+- KPIs: cards with value, traffic-light status, change, target; filter by area; history (7/30/90/365 days); for `analytics.kpi.manage`: add (code, name, measure, period, direction, target/warning/critical with order check), change, switch off/on, include switched-off.
+- Dashboards (`analytics.dashboard.manage`): new dashboard (private / everyone / chosen roles), change or archive (built-in ones cannot be archived), add widget (key figure, key figure over time, table of figures with period and row limit), move earlier/later (swaps positions), remove.
+Tests: `kpisDashboards.test.tsx` (9). Full suite 933/933 in 98 files; build ok; audit 0 vulnerabilities. No backend change.
+Not done: editing an existing widget's settings or title (remove and re-add); a KPI's measure cannot be changed after creation (backend rule for built-ins; not offered for custom ones either); charts are lists of recent values, not graphics; real-browser check.
+
+## F92 — Documents: lifecycle, retention, disposal, links, sharing, access, favourites, saved searches
+
+New `features/documents/DocumentTools.tsx` (rendered on the document page), `DisposalPage.tsx` (`/app/documents/disposals`, menu "Document disposal", documents.disposal.approve), `FavouritesPage.tsx` (`/app/documents/favourites`); saved searches added to `DocumentsPage`.
+- Document page: shortcuts (favourite, use as template, send to people, record a review); lifecycle card (mark obsolete with optional replacement, archive for obsolete/expired, retention date + legal hold with "extend, not shorten" check, request disposal for archived); linked records (add/remove, 10 link kinds); access grants for documents.admin (list, give access to person/department/role with chosen actions and optional end date, withdraw).
+- Disposal page: approve, reject (note required), dispose now for approved; server's separation-of-duties refusal shown.
+- Saved searches: save current search/filters, re-apply, delete.
+Existing documents tests gained default handlers for the two new background requests.
+Tests: `docTools.test.tsx` (23 new). Full suite 947/947 in 99 files; build ok; audit 0 vulnerabilities. No backend change.
+Limits: the favourite toggle looks at the first page of favourites only; folder-level grants not in the UI (document grants only); grants to a project not offered; link record identifiers are typed, not picked.
+Slice 93 (not done): external correspondence, transmittals, RFIs, categories/folders admin, document reports.
+
+## F93 — Documents: external documents, setup and reports (Documents module screens complete)
+
+New `ExternalPage.tsx` (`/app/documents/external`), `DocumentAdminPage.tsx` (`/app/documents/setup`, documents.admin), `DocumentReportsPage.tsx` (`/app/documents/reports`); menu entries added.
+- External documents: correspondence list with status filter; register incoming/outgoing (with optional file, reply-due date, contract reference); start review / accept / reject (reason required) / mark as replied / resubmit a rejected one; transmittals (list, create for chosen published documents with purpose, project, due date); RFIs (list/filter, raise, answer, close). Write actions need documents.external.manage; the server enforces who may answer or close.
+- Setup: categories (add with code, prefix, kind, number length, default visibility, review interval, retention; change; switch off/on) and folders (add, optionally inside another).
+- Reports: the 14 document reports with their own settings; the "who opened what" report only for administrators; results shown with the shared report table.
+Tests: `docExternalAdmin.test.tsx` (9). Full suite 956/956 in 100 files; build ok; audit 0 vulnerabilities. No backend change.
+Limits: category code/prefix/kind cannot change after creation (backend rule); the register report's own filters (category, status, department, project) are not offered; folder grants, folder rename/deactivate and form-template reports not in UI; real-browser check outstanding.
+
+## F94 — Sales order extras and customer statements
+
+**New in the interface**
+- Sales order detail now has an "Order tools" panel (orders that are confirmed, part-delivered or delivered):
+  - **What is left**: per line ordered, to deliver, backordered and to invoice; "Invoice part of the order" lets you pick quantities (never above what can still be invoiced).
+  - **Changes**: request an amendment (new quantities per line, optionally an extra product, reason required), list of amendments, approve or reject (rejection needs a reason). The server's refusal to approve your own request is shown as-is.
+  - **Billing plan**: set steps with percentages that must total exactly 100 (checked before sending, and again by the server), invoice a step, invoiced steps are locked.
+- New page **Customer statements** (`/app/sales/statements`, `sales.view`): choose customer, period and optional currency; shows opening/closing balance, lines and the credit position (limit, owed, open orders, exposure, still available).
+
+**Backend**: no change (uses existing endpoints). **Tests**: 13 new (`features/sales/orderExtras.test.tsx`) covering the validation helpers, partial invoicing, amendment request/approve/reject incl. separation-of-duties refusal, billing plan, and the statement page.
+
+**Not done**: quotation extras, product bundle editor, commission plan edit, draft-contract editing (slice 95). Real-browser pass still outstanding.
+
+## F95 — Quotations: create, edit, approve, revise, print
+
+**New in the interface** (Sales → Quotations)
+- **New quotation** (customer, currency, valid-until, lines from a product picker or free-text items, optional price/discount, terms). Blank price uses the price list; the server prices, checks discounts and may route the quote for approval.
+- **Edit** a draft (sends the version it loaded; a version conflict is shown as the server's message).
+- **Approve discounts / Send back (reason required)** for quotations waiting for approval (needs `sales.order.approve`; the server's own-quotation refusal is shown).
+- **Revise** a sent, rejected, expired or waiting quotation (reason required) — back to draft with a new version.
+- **Show history** (versions and events) and **Printable copy** (opens the server's HTML document in a new tab through an authenticated fetch).
+- Opportunity page: **Create quotation** from the deal's product lines (needs `sales.quote.create`, open deals only).
+
+**Backend**: no change. **Tests**: 12 new in `features/sales/quotations.test.tsx` + 3 in `crm/pipeline.test.tsx`.
+
+**Not done**: the quotation print layout and the new-tab opening have not been seen in a real browser. Moved to slice 96: product bundle editor, commission plan edit/deactivate (works through the existing create-by-name endpoint, so renaming is not possible without a backend change), draft-contract editing, contract amendments/milestones.
+
+## F96 — Product bundles, commission plan edit, contract editing
+
+**New in the interface**
+- **Bundles** (Sales → Pricing → Products): "Bundle for <product>" (needs `sales.pricelist.manage`) shows and edits components and quantities; blocks empty bundles, a product inside itself, duplicates and zero quantities before sending; the server's rules (active, non-bundle components) are shown if refused.
+- **Commission plans**: Edit (tiers and category rates; name is fixed), Deactivate/Activate. Both use the existing create-by-name endpoint, so no backend change. "New plan" now refuses a name that already exists instead of silently overwriting that plan.
+- **Contracts**: "Edit draft" (everything including agreed prices, needs `sales.quote.create`) and "Change wording" on a contract in force (payment/delivery/other terms and renewal settings only, needs `sales.order.approve`; server keeps a new version).
+
+**Backend**: no change. **Tests**: 11 new in `features/sales/salesSetup.test.tsx`.
+
+**Not done**: renaming a commission plan (needs a backend change); contract amendment/milestone views beyond the history list that already exists; real-browser check.
+
+## F97 — HR: required documents, daily attendance, performance and headcount reports
+
+**Correction to the earlier gap list.** The "about 23 HR items" came from a route count that missed endpoints already used through generic action calls (payroll run actions, employee activate/offboard/terminate, leave cancel, timesheet submit, assignment-change cancel, emergency contacts/qualifications/skills). Only four HR routes had no interface:
+
+- **Required documents** page (`/app/hr/document-requirements`, nav "Required documents", `hr.view`; editing needs `hr.config.manage`): list and add/change which documents each employee type must have on file. The server has no delete for these, so none is offered.
+- **Attendance on a day** card on an employee's Employment tab: status, day type, scheduled/worked hours, late/early minutes, overtime, problems, for any date.
+- **Performance ratings** card on HR analytics: choose a review cycle to see completed reviews and the 1–5 rating distribution.
+- **Headcount by department and status** card on HR analytics (uses `reports/headcount`).
+
+**Backend**: no change. **Tests**: 7 new in `features/hr/hrGaps.test.tsx`.
+
+**Not done**: real-browser check. HR items that remain are about depth of existing screens, not missing routes; a proper audit of that has not been done.
+
+## F98 — CRM: lead import, duplicates and merge, contact dates, account extras
+
+**Gap check.** Backend routes were compared with every URL the interface builds, then each candidate was confirmed by searching the source. Real CRM gaps (this slice): lead import, duplicate search, lead merge, contact dates, upcoming dates, child accounts, cross-sell and ownership history. Not built: `crm/segments` (a bare count of accounts per segment label; Customer insights already shows segmentation by revenue). Other areas' real candidates (Assets, Procurement, Inventory, Manufacturing, Finance) are listed at the end.
+
+**New in the interface** (all server-enforced; buttons follow `crm.manage` / `crm.view`)
+- **Leads → Import leads**: choose a CSV or paste rows; "Check file" runs the server's dry run and lists problems row by row; **Import** is enabled only after a clean check of exactly the same text (editing the text re-locks it). Header and 500-row limit checked before sending.
+- **Leads → Duplicates** (per lead, not for converted/merged): shows matching open leads and same-named accounts; merge with a chosen lead, keeping either this one or the other.
+- **Contacts → Add date for …** and **Contact dates** page (`/app/crm/dates`): add a labelled date (yearly or once, reminder days up to 365) and list what is coming in 30/60/90/365 days.
+- **Account page**: Child accounts, Cross-sell ideas (optional currency, validated), Ownership history. **Opportunity page**: Ownership history.
+
+**Backend**: no change. **Tests**: 17 new in `features/crm/crmRecords.test.tsx`.
+
+**Not done / limits**: the CSV file picker itself is not exercised in tests (pasted text is); no real-browser check. Lead ownership history is supported by the card but no lead detail page exists to show it on.
+
+**Remaining real candidates found by the gap check (not yet built):**
+- Assets: asset lookup (`assets/lookup`), acquisitions report, category edit (`assets/categories/:id`).
+- Procurement: settings, per-product suppliers, invoice debit notes, returns summary, spend report.
+- Inventory: product/warehouse/location detail edits, utilisation.
+- Manufacturing: quality check detail (`orders/:id/checks/:id`).
+- Finance: general ledger (`finance/ledger`), account detail.
+These are candidates only; some may be covered by other paths and need a closer look before building.
+
+## F99 — Procurement: settings, product sourcing, returns summary, debit notes
+
+**Gap check result.** Confirmed in code as missing from the interface: procurement settings, per-product suppliers (preferred and price history), the returns/claims summary and debit notes. Not built: `procurement/reports/spend` (spend by supplier) because Procurement analytics already reports spend by supplier and other groupings.
+
+**New in the interface**
+- **Procurement settings** (`/app/procurement/settings`, `procurement.view` to see, `procurement.settings.manage` to change): invoice match tolerance (0–20 %), over-receipt allowance (0–50 %), allow two-way matching. Validated before sending; the server's own check is shown if it refuses.
+- **Product sourcing** (`/app/procurement/product-sourcing`): pick a product to see suppliers to use now (qualified, in good standing, current price, preferred flagged) and the full supplier price history.
+- **Returns and claims → Summary tab**: returns and claims per supplier (count, value returned, claimed, accepted).
+- **Supplier payments → Debit note** (needs `procurement.debit_note.create`): a one-line supplier credit note against a listed invoice (amount before tax, reason, expense account, optional purchase tax, date, optional supplier reference). The server refuses credits above the invoice total, including earlier credits.
+
+**Backend**: no change. **Tests**: 11 new in `features/procurement/procurementTools.test.tsx`.
+
+**Limits**: the debit note action sits on the *due invoices* list, so it is not offered for invoices that are already fully paid (the server would allow those); it creates one line only (multi-line credits remain available from the Finance invoices page as credit notes). No real-browser check.
+
+**Remaining candidates:** Finance (general ledger, account detail), Inventory (product, warehouse and location edits, location utilisation), Assets (lookup, acquisitions report, category edit), Manufacturing (quality check detail).
+
+## F100 — Finance and inventory edits (slice 100)
+
+New: edit account (rename, deactivate/reactivate, shows balance; server refusals for system/control accounts or non-zero balance shown as-is) under `finance.accounts.manage`; General ledger page `/app/finance/ledger` (account code, optional from/to with backwards-range check, opening balance, rows, closing balance) under `reports.financial.view`; edit product (name, category, barcode, description, min/max/reorder/safety stock, active), edit warehouse (name, type, address), edit location (kind, zone/aisle/rack/shelf/bin, capacity, blocked) under `inventory.product.manage`.
+Not exposed: warehouse picking policy, branch/manager, product costing/supplier fields, location active flag (backend accepts them).
+Backend: no changes. Tests: 11 new (ledgerAccounts, inventoryEdits); full suite 1041 tests / 108 files passing; tsc clean; build ok; audit checked.
+
+## F101 — Assets leftovers (slice 101)
+
+New: edit asset category (name, class, depreciation method, life, residual %, rate, threshold, serial required, active) under `assets.category.manage`, shown on Asset setup; Find asset by code page `/app/assets/lookup` (number, barcode, QR or RFID); Acquisitions report `/app/assets/acquisitions` (optional from/to, backwards-range check, rows with total). Both under `assets.view`.
+Checked and dropped: Manufacturing "check detail" — backend `orders/:id/checks/:id` is POST-only (record result) and is already used by the order page; there is no detail view to build.
+Not exposed: category parent, purpose, operational function, tracking, insurance requirement, maintenance/inspection intervals (backend accepts them).
+Backend: no changes. Tests: 4 new (assetTools); full suite 1045 tests / 109 files passing; tsc clean; build ok; audit 0 vulnerabilities.
+
+## F102 — Platform "resend setup email" and backend regression (slice 102)
+
+New: "Resend setup email" button on the platform Tenants page, for ACTIVE tenants, under `platform.tenants.provision` (calls `POST platform/tenants/:id/resend-admin-setup`); success notice or the server's message (for example identity provider mail failure). "Retry provisioning" now also requires `platform.tenants.provision`, matching the backend (it previously showed with only the lifecycle permission and would have been refused). The Actions column shows if the user has either permission.
+Backend: no code changes. Full backend regression run for the first time since slice 60 against a local PostgreSQL 16 (port 5433, trust auth on localhost) and Redis: 705 tests, no failures or errors (counted from the quiet-mode dot output; pytest printed no summary line).
+Frontend: 2 new tests, 1 updated; full suite 1047 tests / 109 files passing; tsc clean; build ok; audit 0 vulnerabilities.
+
+## F103 — Completion audit refreshed (no code change)
+
+`completion-audit.md` rewritten from a fresh route comparison. New finding: the frontend has no notification UI, role-assignment screen, tenant settings/modules screen, workflow-definition designer, event outbox screen or tenant audit page. Planned next.
+
+## F104 — Notifications (slice 104)
+
+New: header link "Notifications" with an unread count (polled every 60 s); `/app/notifications` inbox (own notifications only, unread filter, mark one read, mark all read, cursor paging); `/app/notifications/preferences` (in-app and email switch per kind of notification; everything is on by default, as in the backend). Available to every signed-in tenant member (the backend allows members only to read their own).
+Limits: a notification links to the approvals inbox only when its subject is a workflow item; other subjects show no link because the backend does not say which screen they belong to. The preferences list contains kinds the user has already received or already saved, because the backend has no catalogue of kinds. The unread count refreshes by polling, not push (the specification mentions WebSockets; not built).
+Backend: no changes. Tests: 8 new; full suite 1055 tests / 110 files passing; tsc clean; build ok; audit 0 vulnerabilities.
+
+## F105 — Role assignment, workspace settings, modules (slice 105)
+
+New: "Manage roles" on the Users page (`roles.assign`): see current roles (with scope and end date), remove one, grant a role with an optional end date (temporary access). Delegation limits and the last-owner protection are enforced by the backend; its messages are shown. `/app/settings/general` Workspace settings (`org.settings.manage`): every setting the backend publishes, grouped, typed from the stored value (switch, number, choice, text); only changed values are sent; a non-number is rejected before the request. `/app/settings/modules` Modules (`modules.view`; switching needs `modules.manage`): entitled/enabled status; a module outside the subscription cannot be switched on.
+Limits: role grants are for the whole workspace; roles scoped to a department or project are displayed and removable but not granted here (the backend supports them; needs a scope picker). Settings labels are derived from the key names (the backend sends no descriptions). Some procurement settings are also on the Procurement settings page.
+Backend: no changes. Tests: 9 new; full suite 1064 tests / 111 files passing; tsc clean; build ok; audit 0 vulnerabilities.
+
+## F106 — Tenant audit log and integration events (slice 106)
+
+New: `/app/settings/audit` Audit log (`audit.view`): when, who (name; "System" when no user), action, target, readable details, correlation ID; exact-action filter; cursor paging. `/app/settings/events` Integration events (`events.manage`): waiting and failed counts with the age of the oldest waiting event, status filter, last error, Retry on failed events only (backend refusals shown).
+Limits: the audit filter matches an action exactly (that is what the backend offers); no date or user filter.
+Backend: no changes. Tests: 5 new; full suite 1069 tests / 112 files passing; tsc clean; build ok; audit 0 vulnerabilities.
+
+## F107 — Approval workflow designer (slice 107)
+
+New: `/app/settings/workflows` (`workflow.definitions.manage`). Lists every version (in use / retired) with a readable summary of the steps. "New workflow" and "New version" dialogs: code, name, what it approves (the subject types the backend registers), requester-cannot-approve and same-person-cannot-approve-twice options, and ordered steps (add, remove, move up/down). Each step: name, any-of / all-of policy, one or more approvers (a role, a specific person, head of a department or of the requester's department, the requester's manager), optional amount range, deadline in hours, escalation person. Step positions become the stage order. Input is checked before sending; backend refusals (unknown role, bad thresholds, unknown subject) are shown.
+Behaviour carried from the backend: saving creates version N+1 and retires the active one for that subject; approvals already running keep their version; code and subject cannot change between versions (those fields are locked in the dialog).
+Limits: there is no way to switch a version back on or delete one (the backend has no such route); no dry run of who would be approver; amount ranges are entered as plain numbers.
+Backend: no changes. Tests: 8 new; full suite 1077 tests / 113 files passing; tsc clean; build ok; audit 0 vulnerabilities.
+
+## F108 — CRM segments, sales summary, spend by supplier (slice 108)
+
+New: `/app/crm/segments` Customer segments (`crm.view`): accounts per segment with totals. `/app/sales/summary` Sales summary (`sales.view`): confirmed/delivered/invoiced orders by customer and by product for a period (defaults to this month; backwards range blocked before any request). `/app/procurement/spend` Spend by supplier (`procurement.view`): ordered and invoiced value per supplier and currency for a period.
+Note: Procurement analytics already had a grouped spend view (different route, adds order counts); this one adds invoiced value per supplier. The two overlap by design of the backend.
+Backend: no changes. Tests: 7 new; full suite 1084 tests / 114 files passing; tsc clean; build ok; audit 0 vulnerabilities.
+
+## F109 — Project health and portfolio (slice 109)
+
+New: Health card on every project page (rating Off track / At risk / On track, plain-language reasons, cost and schedule index, percent complete, overdue tasks, open risks and issues); if health cannot be loaded the card shows the server's message and the rest of the page is unaffected. `/app/projects/portfolio` Portfolio (`projects.view`): counts by rating and status, one row per visible project with rating, reasons, percent complete, manager, and margin only where the server includes it (cost visibility is decided by the backend).
+Verified as NOT gaps and dropped from the audit: inventory receipts/issues/transfers/adjustments (Stock page builds the URL from the move kind), supply-chain reports costs/carriers/supplier-delivery (generic report call), document grants (per document, wired), procurement RFQ award (wired), CRM contact consent and procurement goods receipts (wired).
+Still not built (confirmed by code search): project task detail GET/PATCH/DELETE as a page (task edits go through progress today; editing name, dates, assignee, deleting a task has no screen), CRM stage detail, CRM contact links, CRM lead consent, CRM account summary, procurement receipt detail page, document folder grants.
+Backend: no changes. Tests: 6 new; full suite 1090 tests / 115 files passing; tsc clean; build ok; audit 0 vulnerabilities.
+
+## F110 — Project task edit and delete (slice 110)
+
+New on the project page task list: Edit (name, planned start/end, planned hours, change assignee) and Delete with confirmation. Only changed fields are sent. A task that groups sub-tasks has its dates and hours locked (they come from the sub-tasks); a milestone has no hours field. Edit is offered for unfinished tasks on projects that are not completed or cancelled; Delete only for tasks not started (To do, 0%). Every rule is enforced by the backend, whose messages are shown (dependency would break, task has time or expenses booked, only the project manager can edit, etc.).
+Limits: the current assignee is shown by name but the picker has no pre-selected value, so the assignee is only sent when a new one is chosen; assignee cannot be cleared; task description, parent and reopening a finished task are not exposed.
+Backend: no changes. Tests: 6 new; full suite 1096 tests / 116 files passing; tsc clean; build ok; audit 0 vulnerabilities.
+
+## F111 — CRM leftovers (slice 111)
+
+New: `/app/crm/pipeline-settings` Pipeline stages (`crm.assign`): list in current order, edit name/probability/position (only changed values sent), new stage (code, name, position, probability), retire (refused by the server while opportunities sit in the stage); won and lost stages are shown as fixed. Purchase history card on the account page (lifetime value, orders, average, first/last order, open opportunities and cases, satisfaction, top products; optional 3-letter currency). "Consent" action on leads (`crm.manage`): record or withdraw marketing consent, record or clear an opt-out. "Link to another account" action on contacts (`crm.manage`): search accounts, choose role.
+Limits: the server returns no position for stages, so "new position" is entered blind and the list order is whatever the server returns; the lead's current consent state is not sent by the server, so the dialog cannot display it; the contact link dialog does not list a contact's existing links (no such endpoint) and cannot remove one.
+Still not built: procurement goods-receipt detail page, document folder access grants.
+Backend: no changes. Tests: 6 new; full suite 1102 tests / 117 files passing; tsc clean; build ok; audit 0 vulnerabilities.
+
+## F112 — Document folder access grants (slice 112)
+
+New: "Give access" per folder on Document setup (`documents.admin`), using the same dialog as documents (who: person, department or role; what they may do; optional end date). Grants made on the page since it opened are listed under the folders with a Withdraw button.
+Limit: the backend has no route that lists a folder's grants, so earlier grants cannot be shown or withdrawn from this screen.
+Checked and dropped: procurement goods-receipt detail page. `GET procurement/receipts/:id` returns exactly what the Receiving page's list already shows (lines, inspection, lot, evidence upload), so a separate page would add nothing.
+With this, every backend route confirmed missing by the audit has a screen except those with no practical UI (none left known).
+Backend: no changes. Tests: 2 new; full suite 1104 tests / 118 files passing; tsc clean; build ok; audit 0 vulnerabilities.
+
+## F113 — Asset documents and completion audit refresh (slice 113)
+
+New: a "Documents" card on the asset page. It lists the invoices, manuals, certificates, photos and other files attached to the asset, downloads them through the short-lived file link, and (with `assets.asset.manage`) attaches a new one (kind, optional title, file). Server refusals show in the dialog.
+Limit: the backend has no remove route, so attached documents cannot be removed.
+`docs/operations/completion-audit.md` rewritten: all previously confirmed route gaps are built; the remaining open items are the real-browser pass, deployed-stack hardening, bundle splitting and a backend regression re-run.
+Backend: no changes. Tests: 3 new; full suite 1107 tests / 119 files passing; tsc clean; build ok; audit 0 vulnerabilities.

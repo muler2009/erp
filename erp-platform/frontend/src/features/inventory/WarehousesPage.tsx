@@ -2,8 +2,10 @@ import { useState } from "react";
 
 import { useCreateLocationMutation, useCreateWarehouseMutation, useListWarehousesQuery } from "../../shared/api/endpoints";
 import { errorMessage } from "../../shared/api/errors";
-import { Can } from "../../shared/permissions/usePermissions";
+import type { Warehouse, WarehouseLocation } from "../../shared/api/types";
+import { Can, useAccess } from "../../shared/permissions/usePermissions";
 import { Badge, Button, Card, EmptyState, ErrorState, FormField, Modal, PageHeader, Spinner, inputClass } from "../../shared/ui/primitives";
+import { LocationEditDialog, WarehouseEditDialog } from "./StockSetupEdit";
 
 function CodeNameDialog({ title, open, onClose, onSubmit }: { title: string; open: boolean; onClose: () => void; onSubmit: (v: { code: string; name: string }) => Promise<void> }) {
   const [code, setCode] = useState("");
@@ -35,6 +37,9 @@ export function WarehousesPage() {
   const [createLocation] = useCreateLocationMutation();
   const [newWarehouse, setNewWarehouse] = useState(false);
   const [addTo, setAddTo] = useState<{ id: string; code: string } | null>(null);
+  const [editWh, setEditWh] = useState<Warehouse | null>(null);
+  const [editLoc, setEditLoc] = useState<WarehouseLocation | null>(null);
+  const { can } = useAccess();
   return (
     <>
       <PageHeader title="Warehouses" description="Where stock is kept." actions={<Can permission="inventory.product.manage"><Button onClick={() => setNewWarehouse(true)}>New warehouse</Button></Can>} />
@@ -43,15 +48,17 @@ export function WarehousesPage() {
       {data && data.results.length === 0 && <EmptyState title="No warehouses yet" />}
       <div className="grid gap-4 lg:grid-cols-2">
         {data?.results.map((w) => (
-          <Card key={w.id} title={`${w.code} — ${w.name}`} actions={<div className="flex items-center gap-2">{!w.is_active && <Badge>Inactive</Badge>}<Can permission="inventory.product.manage"><Button variant="secondary" aria-label={`Add location to ${w.code}`} onClick={() => setAddTo({ id: w.id, code: w.code })}>Add location</Button></Can></div>}>
+          <Card key={w.id} title={`${w.code} — ${w.name}`} actions={<div className="flex items-center gap-2">{!w.is_active && <Badge>Inactive</Badge>}<Can permission="inventory.product.manage"><Button variant="secondary" aria-label={`Edit warehouse ${w.code}`} onClick={() => setEditWh(w)}>Edit</Button><Button variant="secondary" aria-label={`Add location to ${w.code}`} onClick={() => setAddTo({ id: w.id, code: w.code })}>Add location</Button></Can></div>}>
             {w.locations.length === 0 ? <p className="text-sm text-slate-500">No locations yet.</p> : (
               <ul className="flex flex-wrap gap-1">
-                {w.locations.map((l) => <li key={l.id} className={`rounded px-2 py-0.5 text-xs ${l.is_blocked ? "bg-red-100 text-red-800" : "bg-slate-100 text-slate-700"}`}>{l.code}{l.is_blocked ? " (blocked)" : ""}</li>)}
+                {w.locations.map((l) => <li key={l.id} className={`rounded px-2 py-0.5 text-xs ${l.is_blocked ? "bg-red-100 text-red-800" : "bg-slate-100 text-slate-700"}`}>{can("inventory.product.manage") ? <button type="button" aria-label={`Edit location ${l.code}`} onClick={() => setEditLoc(l)}>{l.code}{l.is_blocked ? " (blocked)" : ""}</button> : <>{l.code}{l.is_blocked ? " (blocked)" : ""}</>}</li>)}
               </ul>
             )}
           </Card>
         ))}
       </div>
+      {editWh && <WarehouseEditDialog warehouse={editWh} onClose={() => setEditWh(null)} />}
+      {editLoc && <LocationEditDialog location={editLoc} onClose={() => setEditLoc(null)} />}
       <CodeNameDialog title="New warehouse" open={newWarehouse} onClose={() => setNewWarehouse(false)} onSubmit={async (v) => { await createWarehouse(v).unwrap(); }} />
       <CodeNameDialog title={addTo ? `New location in ${addTo.code}` : ""} open={!!addTo} onClose={() => setAddTo(null)} onSubmit={async (v) => { await createLocation({ warehouse: addTo!.id, ...v }).unwrap(); }} />
     </>

@@ -1,4 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
+import { LinkContactDialog } from "./CrmSetup";
 import { useState } from "react";
 import { Link } from "react-router";
 
@@ -8,6 +9,7 @@ import type { CrmContact } from "../../shared/api/types";
 import { useAccess } from "../../shared/permissions/usePermissions";
 import { DataTable } from "../../shared/ui/DataTable";
 import { Badge, Button, PageHeader, inputClass } from "../../shared/ui/primitives";
+import { ContactDateDialog } from "./AccountExtras";
 import { ContactDialog } from "./ContactDialog";
 import { CONTACT_ROLES, label } from "./options";
 
@@ -21,6 +23,8 @@ export function ContactsTable({ account, canManage }: { account?: string; canMan
   const [cursor, setCursor] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [editing, setEditing] = useState<CrmContact | null>(null);
+  const [dating, setDating] = useState<CrmContact | null>(null);
+  const [linking, setLinking] = useState<CrmContact | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const accounts = useListCrmAccountsQuery(undefined, { skip: !!account });
   const { data, isLoading, error, refetch } = useListCrmContactsQuery({ cursor, ...(account ? { account } : {}), ...(q.trim() ? { q: q.trim() } : {}) });
@@ -41,6 +45,8 @@ export function ContactsTable({ account, canManage }: { account?: string; canMan
       return (
         <div className="flex gap-2">
           <Button variant="secondary" onClick={() => setEditing(c)}>{`Edit ${name}`}</Button>
+          <Button variant="secondary" onClick={() => setDating(c)}>{`Add date for ${name}`}</Button>
+          <Button variant="secondary" onClick={() => setLinking(c)}>{`Link ${name} to another account`}</Button>
           {c.consent.opted_out
             ? <Button variant="secondary" onClick={() => toggle(c, { opt_out: false })}>{`Resume contact with ${name}`}</Button>
             : <><Button variant="secondary" onClick={() => toggle(c, { email: !c.consent.email })}>{c.consent.email ? `Withdraw email consent for ${name}` : `Record email consent for ${name}`}</Button>
@@ -54,6 +60,8 @@ export function ContactsTable({ account, canManage }: { account?: string; canMan
       <input aria-label="Search contacts" placeholder="Search by name or email" className={`${inputClass} mb-3 max-w-sm`} value={q} onChange={(e) => { setQ(e.target.value); setCursor(null); }} />
       {err && <p role="alert" className="mb-3 text-sm text-red-700">{err}</p>}
       <DataTable caption="Contacts" columns={columns} page={data} isLoading={isLoading} error={error} onRetry={refetch} emptyTitle="No contacts found" onCursor={setCursor} hasPrevious={cursor !== null} onFirst={() => setCursor(null)} />
+      {linking && <LinkContactDialog contact={linking} onClose={() => setLinking(null)} />}
+      {dating && <ContactDateDialog contactId={dating.id} name={`${dating.first_name} ${dating.last_name}`.trim()} onClose={() => setDating(null)} />}
       {editing && <ContactDialog key={editing.id} contact={editing} accounts={account ? undefined : (accounts.data?.results ?? []).map((a) => [a.id, a.name])} onClose={() => setEditing(null)} />}
     </>
   );

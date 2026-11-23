@@ -1,39 +1,33 @@
-# Completion audit — 2026-11-17 (after frontend slice 63)
+# Completion audit — 2026-11-23 (after frontend slice 113)
 
-Method: every `path(...)` in `backend/config/urls_tenant.py` was compared with the URLs used in `frontend/src/shared/api/endpoints.ts`. The comparison is approximate (template-literal URLs are normalised), so counts can be off by a few, but the order of magnitude is reliable. All 14 modules exist and are tested in the **backend** (Phases 1–11). The **frontend** is not complete.
+Replaces the 2026-11-22 audit (slice 102), which listed foundation gaps that are now built.
 
-| # | Module | Backend endpoints | Not yet used by the frontend | Frontend state |
-|---|---|---|---|---|
-| 1 | Organization & administration | 24 (+ users, roles, sequences, settings) | 12 org, `settings`, `notification-preferences`, `role-assignments` | Company, structure, reference data, numbering, members done. **Missing:** tenant settings screen, role-assignment screens beyond roles, notification preferences, exchange-rate import |
-| 2 | Finance & accounting | 27 | 8 | Largely covered (accounts, journals, invoices, reports); not compared endpoint-by-endpoint for the last 8 |
-| 3 | HR & payroll | 119 | 23 | Broad coverage (25 routes); remaining admin/reporting endpoints |
-| 4 | CRM | 70 | 18 | Accounts, contacts, leads/opps, activities, campaigns, service cases, teams, insights done. **Missing:** lead edit/duplicate/merge/import, stage configuration, calendar grid |
-| 5 | Sales | 68 | ~25 | Quotations, orders, pricing, deliveries, returns, analytics, targets and commission, contracts, backorders, receivables aging done. **Missing:** contract editing/amendments, quotation extras, bundle editor, plan edit |
-| 6 | Procurement | 89 | **71** | 7 routes only. **Largest gap in a started module:** supplier qualification/evaluation, RFQ and bid comparison, contracts, goods-receipt/3-way match views, analytics (spend, cycle times, price variance, supplier performance) |
-| 7 | Inventory & warehouse | 43 | 26 | 8 routes. **Missing:** lots/serials, reservations, cycle counts, reorder rules, valuation, movement history views |
-| 8 | Supply chain & logistics | 51 | **51 (all)** | **No frontend.** Carriers, shipments, routes, exceptions, forecasts, replenishment, demand plans, risks, vehicles, analytics |
-| 9 | Manufacturing | 55 | **55 (all)** | **No frontend.** BOMs, work centers, production orders, operations, QC checks, scrap/receipts, MRP preview, plans, downtime, reports |
-| 10 | Projects & tasks | 29 | 3 | Covered apart from 3 endpoints |
-| 11 | Assets & maintenance | 73 | 14 | 14 routes; remaining endpoints are secondary |
-| 12 | Quality | 105 (in QMS views) | — | Most complete frontend (39 routes) |
-| 13 | Documents & workflow | 44 | 44 → ~30 after slice 63 | **Started in slice 63:** library, upload, versions, submit/withdraw/publish, comments, acknowledgements. **Still missing:** folders and categories admin, access grants, distribution, periodic review, disposal approvals, external documents, transmittals, RFIs, saved searches, favourites, reports; workflow *designer* UI |
-| 14 | Business intelligence | generated views (`anv.VIEWS`) | most | Only 3 endpoints wired; **no dashboards/KPI/scheduled-report screens** |
+## Method
+Every `path(...)` in `backend/config/urls_tenant.py` (about 600 routes) was compared with the `api/v1/...` URLs built in non-test frontend source (script `/tmp/audit.py`, not kept in the repo). Candidates were then confirmed by grepping the frontend for the endpoint's own words. Routes reached through generic calls (for example inventory receipts/issues/transfers/adjustments through one movement mutation, manufacturing operation steps through the production-order page, `assets/capitalizations`, `/label`) are not gaps.
+
+## Where things stand
+- **Backend:** all 14 modules and the platform foundation exist. Last full regression: 2026-11-22, about 705 tests, 0 failures. It has not been re-run since; the slices after it changed no backend code.
+- **Frontend:** every module has screens, and every route confirmed missing in the previous audit now has one: notifications and preferences, role assignment, tenant settings and module list, workflow designer, tenant audit log, event outbox, CRM segments/pipeline settings/account summary/lead consent/contact links, sales summary, procurement spend, project health/portfolio/task edit, document folder grants, asset documents.
+- Last script run: the only uncovered routes are `public/config` (used before login by the auth bootstrap), the generic `files/*` routes (used through document, asset, HR and quality uploads and `downloadFile`; there is no stand-alone file browser, and none is specified), and routes confirmed as reached through generic calls above.
+
+## Known small limits (backend gives no data, or not worth a screen)
+- Folder access grants: the backend cannot list a folder's earlier grants, so the screen shows only grants made in the current session.
+- Stage position is not exposed to the pipeline settings screen; lead consent state is not displayed (only changeable).
+- Role grants from the UI are workspace-wide only.
+- Document pickers (attach a document to arbitrary records) and an equipment picker for inspections do not exist.
+- Asset documents can be attached and downloaded but not removed (the backend has no delete route).
 
 ## Cross-cutting items still open
-- No screen has been driven in a real browser since the earliest slices (setup in `e2e-local.md`); everything since is covered by component tests with a mocked API only.
-- Platform-admin "resend admin setup email" button; Keycloak outgoing mail is not configured.
-- Document pickers (attach documents to records) and equipment picker for inspections.
-- Bundle ≈ 550 kB (no route-level code splitting yet).
-- `npm audit`: 5 high findings from one advisory (picomatch ReDoS) in build/test tooling; no patched release exists as of 2026-11-17 (see F62).
-- Backend not re-run in full since slice 60 (only the sales dispatch and CRM/sales API files).
+1. **No screen has been driven in a real browser** since the earliest slices (setup in `e2e-local.md`). Print layout, file downloads and new-tab opening are only tested with jsdom. This is the biggest unverified risk.
+2. **Deployed-stack hardening:** rate-limit, upload and import abuse tests exist only as backend tests, not repeated against a running stack.
+3. **Bundle** about 550 kB, no route-level code splitting.
+4. **Backend regression** should be re-run before any release.
+5. Keycloak outgoing mail is not configured in the dev setup.
 
-## Recommended order to finish
-1. Sales remainder (quotation extras, amendments, bundle editor) — small.
-2. Procurement: suppliers evaluation, RFQ/bids, contracts, analytics (largest started gap).
-3. Inventory: lots/serials, cycle counts, reorder, valuation.
-4. Manufacturing, then Supply chain (new modules; each ≈ 6–8 slices).
-5. Documents remainder; BI dashboards.
-6. Real-browser pass per module; full backend regression; production hardening checks.
+## Recommended order
+1. Real-browser pass per module (the only way to find layout, download and navigation faults).
+2. Route-level code splitting.
+3. Backend regression re-run and deployed-stack hardening checks.
 
 ## Verdict
-The platform is **not finalized**. Backend: complete for all 14 modules. Frontend: roughly half of the backend surface has a screen; Manufacturing, Supply Chain and BI have none, Documents has its core only.
+The platform is **not finalized**. Backend: complete for all 14 modules with a passing regression (as of slice 102). Frontend: every confirmed backend route has a working, tested screen, but nothing has been verified in a real browser or against a deployed stack.

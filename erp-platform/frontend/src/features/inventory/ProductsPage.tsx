@@ -11,6 +11,8 @@ import { formatMoney } from "../../shared/lib/money";
 import { Can } from "../../shared/permissions/usePermissions";
 import { DataTable } from "../../shared/ui/DataTable";
 import { Badge, Button, FormField, Modal, PageHeader, inputClass } from "../../shared/ui/primitives";
+import { ProductEditDialog } from "./StockSetupEdit";
+import { useAccess } from "../../shared/permissions/usePermissions";
 
 export const productSchema = z.object({
   sku: z.string().trim().min(1, "SKU is required").max(60),
@@ -80,14 +82,18 @@ export function ProductsPage() {
   useEffect(() => { const t = setTimeout(() => { setSearch(text.trim()); setCursor(null); }, 300); return () => clearTimeout(t); }, [text]);
   const { data, isLoading, error, refetch } = useListProductsQuery({ cursor, search });
   const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<Product | null>(null);
+  const { can } = useAccess();
+  const cols = can("inventory.product.manage") ? [...columns, { header: "", id: "edit", cell: ({ row }: { row: { original: Product } }) => <Button variant="secondary" aria-label={`Edit ${row.original.sku}`} onClick={() => setEditing(row.original)}>Edit</Button> } as ColumnDef<Product>] : columns;
   return (
     <>
       <PageHeader title="Products" actions={<Can permission="inventory.product.manage"><Button onClick={() => setCreating(true)}>New product</Button></Can>} />
       <label className="mb-3 flex items-center gap-2 text-sm">Search
         <input type="search" className={`${inputClass} w-64`} value={text} onChange={(e) => setText(e.target.value)} placeholder="Product name" />
       </label>
-      <DataTable caption="Products" columns={columns} page={data} isLoading={isLoading} error={error} onRetry={refetch} emptyTitle="No products" emptyHint={search ? "Try a different name." : undefined} onCursor={setCursor} hasPrevious={cursor !== null} onFirst={() => setCursor(null)} />
+      <DataTable caption="Products" columns={cols} page={data} isLoading={isLoading} error={error} onRetry={refetch} emptyTitle="No products" emptyHint={search ? "Try a different name." : undefined} onCursor={setCursor} hasPrevious={cursor !== null} onFirst={() => setCursor(null)} />
       <CreateDialog open={creating} onClose={() => setCreating(false)} />
+      {editing && <ProductEditDialog key={editing.id} product={editing} onClose={() => setEditing(null)} />}
     </>
   );
 }

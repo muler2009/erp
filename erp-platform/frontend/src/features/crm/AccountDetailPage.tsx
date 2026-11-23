@@ -9,8 +9,10 @@ import { Badge, Button, Card, EmptyState, ErrorState, PageHeader, Spinner } from
 import { ActionDialog } from "../hr/ActionDialog";
 import { useUserNames, useUserOptions } from "../quality/names";
 import { ContactDialog } from "./ContactDialog";
+import { AccountSummaryCard } from "./CrmSetup";
 import { ContactsTable } from "./ContactsPage";
 import { CHANNELS, CREDIT, CUSTOMER_TYPES, LIFECYCLES, label } from "./options";
+import { ChildrenCard, CrossSellCard, OwnershipCard } from "./AccountExtras";
 
 const KINDS: [string, string][] = [["BILLING", "Billing"], ["DELIVERY", "Delivery"], ["BRANCH", "Branch"]];
 
@@ -132,7 +134,11 @@ export function AccountDetailPage() {
       <Card title="Contacts" actions={manage ? <Button variant="secondary" onClick={() => setAddContact(true)}>Add contact</Button> : undefined}>
         <ContactsTable account={id} canManage={manage} />
       </Card>
+      <ChildrenCard id={id} />
+      <AccountSummaryCard id={id} />
+      <CrossSellCard id={id} />
       <AddressCard id={id} canEdit={manage} />
+      <OwnershipCard kind="account" id={id} />
       <TimelineCard id={id} />
       {addContact && <ContactDialog contact={null} accountId={id} onClose={() => setAddContact(false)} />}
     </>

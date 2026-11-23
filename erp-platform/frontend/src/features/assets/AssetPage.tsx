@@ -9,6 +9,7 @@ import { Badge, Button, Card, EmptyState, ErrorState, PageHeader, Spinner } from
 import { ActionDialog } from "../hr/ActionDialog";
 import { pretty } from "../hr/EmployeeDialogs";
 import { AcquisitionCard } from "./AcquisitionCard";
+import { AssetDocumentsCard } from "./AssetDocuments";
 import { WarrantyCard } from "./WarrantyCard";
 import { assetTone } from "./AssetsPage";
 
@@ -83,6 +84,7 @@ export function AssetPage() {
       </div>
       <div className="mt-4"><AcquisitionCard id={id} /></div>
       <div className="mt-4"><WarrantyCard id={id} /></div>
+      <div className="mt-4"><AssetDocumentsCard id={id} /></div>
       <div className="mt-4"><Card title="History">
         {history.isLoading ? <Spinner /> : history.error ? <ErrorState error={history.error} onRetry={history.refetch} /> : !history.data?.results.length ? <EmptyState title="No history yet" /> : (
           <ul className="text-sm">{history.data.results.map((h, i) => <li key={i} className="border-b border-slate-100 py-1"><span className="text-slate-500">{new Date(h.at).toLocaleString()}</span> — {pretty(h.event)}{h.note ? `: ${h.note}` : ""}</li>)}</ul>

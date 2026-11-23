@@ -33,23 +33,23 @@ def _wc(w):
 def _bom(b, detail=False):
     d = {"id": str(b.id), "product": str(b.product_id), "sku": b.product.sku, "version": b.version, "name": b.name, "quantity": str(b.quantity), "status": b.status, "created_by": str(b.created_by), "approved_by": _s(b.approved_by)}
     if detail:
-        d["lines"] = [{"component": str(x.component_id), "sku": x.component.sku, "quantity": str(x.quantity), "scrap_percent": str(x.scrap_percent), "substitutes": [{"product": str(y.product_id), "ratio": str(y.ratio)} for y in x.substitutes.all()]} for x in b.lines.select_related("component")]
+        d["lines"] = [{"component": str(x.component_id), "sku": x.component.sku, "quantity": str(x.quantity), "scrap_percent": str(x.scrap_percent), "substitutes": [{"product": str(y.product_id), "sku": y.product.sku, "ratio": str(y.ratio)} for y in x.substitutes.select_related("product")]} for x in b.lines.select_related("component")]
         d["steps"] = [{"sequence": s.sequence, "name": s.name, "work_center": str(s.work_center_id), "setup_hours": str(s.setup_hours), "run_hours": str(s.run_hours)} for s in b.steps.all()]
         d["checks"] = [{"name": c.name, "step_sequence": c.step_sequence, "specification": c.specification, "lower_limit": _s(c.lower_limit), "upper_limit": _s(c.upper_limit)} for c in b.checks.all()]
         d["standard_cost"] = str(bs.standard_cost(b))
         d["effective_from"], d["effective_to"] = (str(b.effective_from) if b.effective_from else None), (str(b.effective_to) if b.effective_to else None)
-        d["byproducts"] = [{"product": str(x.product_id), "quantity": str(x.quantity)} for x in b.byproducts.all()]
+        d["byproducts"] = [{"product": str(x.product_id), "sku": x.product.sku, "quantity": str(x.quantity)} for x in b.byproducts.select_related("product")]
     return d
 
 
 def _order(o, detail=False):
     d = {"id": str(o.id), "number": o.number, "product": str(o.product_id), "sku": o.product.sku, "bom": str(o.bom_id), "quantity": str(o.quantity), "status": o.status, "planned_start": str(o.planned_start), "planned_end": str(o.planned_end),
-         "produced_quantity": str(o.produced_quantity), "scrapped_quantity": str(o.scrapped_quantity), "standard_unit_cost": str(o.standard_unit_cost), "sales_order_id": _s(o.sales_order_id), "created_by": str(o.created_by)}
+         "produced_quantity": str(o.produced_quantity), "scrapped_quantity": str(o.scrapped_quantity), "standard_unit_cost": str(o.standard_unit_cost), "sales_order_id": _s(o.sales_order_id), "created_by": str(o.created_by), "priority": o.priority, "is_rework": o.rework_of_id is not None}
     if detail:
         d["components"] = [{"id": str(c.id), "product": str(c.product_id), "sku": c.product.sku, "required": str(c.required_quantity), "issued": str(c.issued_quantity), "returned": str(c.returned_quantity)} for c in o.components.select_related("product")]
-        d["operations"] = [{"id": str(x.id), "sequence": x.sequence, "name": x.name, "work_center": x.work_center.code, "status": x.status, "planned_hours": str(x.planned_hours), "actual_hours": str(x.actual_hours), "planned_start": _s(x.planned_start), "planned_end": _s(x.planned_end)} for x in o.operations.select_related("work_center")]
+        d["operations"] = [{"id": str(x.id), "sequence": x.sequence, "name": x.name, "work_center": x.work_center.code, "status": x.status, "planned_hours": str(x.planned_hours), "actual_hours": str(x.actual_hours), "planned_start": _s(x.planned_start), "planned_end": _s(x.planned_end), "is_paused": x.is_paused, "approved": x.approved_by is not None} for x in o.operations.select_related("work_center")]
         d["checks"] = [{"id": str(c.id), "name": c.name, "step_sequence": c.step_sequence, "result": c.result, "specification": c.specification} for c in o.checks.all()]
-        d["receipts"] = [{"quantity": str(r.quantity), "unit_cost": str(r.unit_cost), "lot_code": r.lot_code} for r in o.receipts.all()]
+        d["receipts"] = [{"id": str(r.id), "status": r.status, "quantity": str(r.quantity), "unit_cost": str(r.unit_cost), "lot_code": r.lot_code} for r in o.receipts.all()]
     return d
 
 
@@ -101,7 +101,8 @@ class BomDetail(APIView):
 
     def patch(self, request, pk):
         b = request.data
-        return Response(_bom(bs.update_bom(request.user.id, pk, lines=b.get("lines"), steps=b.get("steps"), checks=b.get("checks"), quantity=b.get("quantity"), name=b.get("name")), True))
+        window = "effective_from" in b or "effective_to" in b
+        return Response(_bom(bs.update_bom(request.user.id, pk, lines=b.get("lines"), steps=b.get("steps"), checks=b.get("checks"), quantity=b.get("quantity"), name=b.get("name"), byproducts=b.get("byproducts"), effective_from=_d(b.get("effective_from")), effective_to=_d(b.get("effective_to")), set_window=window), True))
 
 
 class BomApprove(APIView):

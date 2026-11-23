@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router";
 
-import { useAssignCrmOwnerMutation, useGetCrmOppHistoryQuery, useGetCrmOppLinesQuery, useGetCrmOpportunityQuery, useListProductsQuery, useSetCrmOppLinesMutation, useUpdateCrmOpportunityMutation } from "../../shared/api/endpoints";
+import { useAssignCrmOwnerMutation, useGetCrmOppHistoryQuery, useGetCrmOppLinesQuery, useGetCrmOpportunityQuery, useListProductsQuery, useQuoteFromOpportunityMutation, useSetCrmOppLinesMutation, useUpdateCrmOpportunityMutation } from "../../shared/api/endpoints";
 import { errorMessage } from "../../shared/api/errors";
 import type { OppLine, OpportunityDetail } from "../../shared/api/types";
 import { formatMoney } from "../../shared/lib/money";
@@ -10,6 +10,7 @@ import { Badge, Button, Card, EmptyState, ErrorState, PageHeader, Spinner, input
 import { useAccountNames } from "../../shared/ui/useAccountNames";
 import { ActionDialog } from "../hr/ActionDialog";
 import { useUserNames, useUserOptions } from "../quality/names";
+import { OwnershipCard } from "./AccountExtras";
 
 const moneyOk = (s: string) => /^\d+(\.\d{1,2})?$/.test(s.trim());
 const qtyOk = (s: string) => /^\d+(\.\d{1,3})?$/.test(s.trim()) && Number(s) > 0;
@@ -128,6 +129,21 @@ function OwnerCard({ o }: { o: OpportunityDetail }) {
   );
 }
 
+function QuoteCard({ id }: { id: string }) {
+  const [make] = useQuoteFromOpportunityMutation();
+  const [open, setOpen] = useState(false);
+  const [made, setMade] = useState<string | null>(null);
+  return (
+    <Card title="Quotation">
+      <p className="mb-2 text-sm text-slate-600">Turn the product lines of this opportunity into a draft quotation, priced from the price list.</p>
+      {made && <p role="status" className="mb-2 text-sm text-green-700">Quotation {made} created. <Link className="underline" to="/app/sales/quotations">Open quotations</Link></p>}
+      <Button variant="secondary" onClick={() => setOpen(true)}>Create quotation</Button>
+      {open && <ActionDialog title="Create quotation" cta="Create" open onClose={() => setOpen(false)} fields={[{ name: "valid_until", label: "Valid until", type: "date" }, { name: "payment_terms", label: "Payment terms" }, { name: "delivery_terms", label: "Delivery terms" }]}
+        submit={async (v) => { const q = await make({ id, ...(v.valid_until ? { valid_until: v.valid_until } : {}), payment_terms: v.payment_terms ?? "", delivery_terms: v.delivery_terms ?? "" }).unwrap(); setMade(q.number); }} />}
+    </Card>
+  );
+}
+
 export function OpportunityDetailPage() {
   const { id = "" } = useParams();
   const { can } = useAccess();
@@ -144,6 +160,8 @@ export function OpportunityDetailPage() {
       <DetailsCard o={data} canEdit={manage} />
       {can("crm.assign") && open ? <OwnerCard o={data} /> : null}
       <LinesCard id={id} editable={manage} />
+      {can("sales.quote.create") && open ? <QuoteCard id={id} /> : null}
+      <OwnershipCard kind="opportunity" id={id} />
       <HistoryCard id={id} />
     </>
   );

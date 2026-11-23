@@ -164,6 +164,36 @@ describe("OpportunityDetailPage", () => {
   });
 });
 
+describe("Quotation from an opportunity", () => {
+  function detail(permissions: string[], extra: Parameters<typeof server.use> = []) {
+    server.use(accounts, http.get("*/api/v1/crm/opportunities/o1", () => HttpResponse.json(opp())), http.get("*/api/v1/hr/employees", () => HttpResponse.json({ results: [] })),
+      http.get("*/api/v1/crm/opportunities/o1/history", () => HttpResponse.json([])), http.get("*/api/v1/crm/opportunities/o1/lines", () => HttpResponse.json([])), ...extra);
+    return renderWithProviders(<Routes><Route path="/app/crm/opportunities/:id" element={<OpportunityDetailPage />} /></Routes>, { permissions, route: "/app/crm/opportunities/o1" });
+  }
+  it("creates a draft quotation from an open deal", async () => {
+    let body: Record<string, unknown> = {};
+    detail(["crm.view", "sales.quote.create"], [http.post("*/api/v1/sales/opportunities/o1/quotation", async ({ request }) => { body = (await request.json()) as Record<string, unknown>; return HttpResponse.json({ id: "q1", number: "QT-9" }, { status: 201 }); })]);
+    await userEvent.click(await screen.findByRole("button", { name: "Create quotation" }));
+    const d = within(await screen.findByRole("dialog", { name: "Create quotation" }));
+    await userEvent.type(d.getByLabelText("Payment terms"), "Net 30");
+    await userEvent.click(d.getByRole("button", { name: "Create" }));
+    expect(await screen.findByText(/Quotation QT-9 created/)).toBeInTheDocument();
+    expect(body).toEqual({ payment_terms: "Net 30", delivery_terms: "" });
+  });
+  it("shows the server's reason when the deal has no product lines", async () => {
+    detail(["crm.view", "sales.quote.create"], [http.post("*/api/v1/sales/opportunities/o1/quotation", () => HttpResponse.json({ error: { code: "no_lines", message: "The opportunity has no product lines to quote." } }, { status: 422 }))]);
+    await userEvent.click(await screen.findByRole("button", { name: "Create quotation" }));
+    const d = within(await screen.findByRole("dialog", { name: "Create quotation" }));
+    await userEvent.click(d.getByRole("button", { name: "Create" }));
+    expect(await d.findByText("The opportunity has no product lines to quote.")).toBeInTheDocument();
+  });
+  it("is hidden without the permission", async () => {
+    detail(["crm.view"]);
+    await screen.findByText("Big deal");
+    expect(screen.queryByRole("button", { name: "Create quotation" })).toBeNull();
+  });
+});
+
 describe("OpportunitiesPage creation", () => {
   it("creates an opportunity for a chosen account", async () => {
     let body: Record<string, unknown> = {};

@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-import { useCreateTenantMutation, useListTenantsQuery, useRetryProvisioningMutation, useTenantLifecycleMutation } from "../../shared/api/endpoints";
+import { useCreateTenantMutation, useListTenantsQuery, useResendAdminSetupMutation, useRetryProvisioningMutation, useTenantLifecycleMutation } from "../../shared/api/endpoints";
 import { errorMessage, fieldErrors } from "../../shared/api/errors";
 import type { PlatformTenant } from "../../shared/api/types";
 import { formatDateTime } from "../../shared/lib/format";
@@ -71,12 +71,14 @@ export function TenantsPage() {
   const { data, isLoading, error, refetch } = useListTenantsQuery({ cursor });
   const [lifecycle] = useTenantLifecycleMutation();
   const [retry] = useRetryProvisioningMutation();
+  const [resend] = useResendAdminSetupMutation();
+  const [notice, setNotice] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const { can } = useAccess();
 
   const run = async (fn: () => Promise<unknown>) => {
-    setActionError(null);
+    setActionError(null); setNotice(null);
     try { await fn(); } catch (e) { setActionError(errorMessage(e)); }
   };
 
@@ -88,7 +90,7 @@ export function TenantsPage() {
       { header: "Status", cell: ({ row }) => <Badge tone={tone(row.original.status)}>{row.original.status.replace(/_/g, " ")}</Badge> },
       { header: "Created", cell: ({ row }) => formatDateTime(row.original.created_at) },
     ];
-    if (can("platform.tenants.lifecycle")) {
+    if (can("platform.tenants.lifecycle") || can("platform.tenants.provision")) {
       cols.push({
         id: "actions",
         header: "Actions",
@@ -97,12 +99,16 @@ export function TenantsPage() {
           const act = (action: "suspend" | "reactivate" | "deactivate", label: string) => (
             <Button variant="secondary" aria-label={`${label} ${t.name}`} onClick={() => void run(() => lifecycle({ id: t.id, action }).unwrap())}>{label}</Button>
           );
+          const lifecycleOk = can("platform.tenants.lifecycle");
           return (
             <div className="flex flex-wrap gap-1">
-              {t.status === "ACTIVE" && <>{act("suspend", "Suspend")}{act("deactivate", "Deactivate")}</>}
-              {t.status === "SUSPENDED" && <>{act("reactivate", "Reactivate")}{act("deactivate", "Deactivate")}</>}
-              {t.status === "DEACTIVATED" && act("reactivate", "Reactivate")}
-              {(t.status === "PROVISIONING_FAILED" || t.status === "PROVISIONING") && (
+              {t.status === "ACTIVE" && can("platform.tenants.provision") && (
+                <Button variant="secondary" aria-label={`Resend setup email ${t.name}`} onClick={() => void run(async () => { await resend(t.id).unwrap(); setNotice(`Setup email sent again to the administrator of ${t.name}.`); })}>Resend setup email</Button>
+              )}
+              {lifecycleOk && t.status === "ACTIVE" && <>{act("suspend", "Suspend")}{act("deactivate", "Deactivate")}</>}
+              {lifecycleOk && t.status === "SUSPENDED" && <>{act("reactivate", "Reactivate")}{act("deactivate", "Deactivate")}</>}
+              {lifecycleOk && t.status === "DEACTIVATED" && act("reactivate", "Reactivate")}
+              {can("platform.tenants.provision") && (t.status === "PROVISIONING_FAILED" || t.status === "PROVISIONING") && (
                 <Button variant="secondary" aria-label={`Retry provisioning ${t.name}`} onClick={() => void run(() => retry(t.id).unwrap())}>Retry provisioning</Button>
               )}
             </div>
@@ -111,7 +117,7 @@ export function TenantsPage() {
       });
     }
     return cols;
-  }, [can, lifecycle, retry]);
+  }, [can, lifecycle, retry, resend]);
 
   return (
     <>
@@ -120,6 +126,7 @@ export function TenantsPage() {
         description="Customer workspaces on this platform."
         actions={<Can permission="platform.tenants.create"><Button onClick={() => setCreating(true)}>Create tenant</Button></Can>}
       />
+      {notice && <p role="status" className="mb-3 rounded-md bg-green-50 p-3 text-sm text-green-800">{notice}</p>}
       {actionError && <p role="alert" className="mb-3 rounded-md bg-red-50 p-3 text-sm text-red-800">{actionError}</p>}
       <DataTable
         caption="Tenants" columns={columns} page={data} isLoading={isLoading} error={error} onRetry={refetch}

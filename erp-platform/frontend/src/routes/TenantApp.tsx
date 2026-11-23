@@ -1,3 +1,18 @@
+import { PipelineSettingsPage } from "../features/crm/CrmSetup";
+import { PortfolioPage } from "../features/projects/HealthPortfolio";
+import { CrmSegmentsPage, SalesSummaryPage, SpendReportPage } from "../features/reports/ModuleReports";
+import { WorkflowDefinitionsPage } from "../features/workflow/DefinitionsPage";
+import { EventOutboxPage, TenantAuditPage } from "../features/audit/AuditEventsPages";
+import { ModulesPage, TenantSettingsPage } from "../features/settings/TenantSettingsPage";
+import { NotificationPreferencesPage, NotificationsPage } from "../features/notifications/NotificationsPage";
+import { AcquisitionsReportPage, AssetLookupPage } from "../features/assets/AssetTools";
+import { LedgerPage } from "../features/finance/AccountEdit";
+import { ProcurementSettingsPage, ProductSourcingPage } from "../features/procurement/ProcurementTools";
+import { UpcomingDatesPage } from "../features/crm/AccountExtras";
+import { DocRequirementsPage } from "../features/hr/DocRequirementsPage";
+import { CustomerStatementPage } from "../features/sales/StatementPage";
+import { KpisPage } from "../features/analytics/KpisPage";
+import { ReportsPage } from "../features/analytics/ReportsPage";
 import { FleetPage } from "../features/assets/FleetPage";
 import { CapaListPage } from "../features/quality/CapaListPage";
 import { CapaPage } from "../features/quality/CapaPage";
@@ -88,6 +103,32 @@ import { PurchaseContractsPage } from "../features/procurement/PurchaseContracts
 import { BlanketOrdersPage } from "../features/procurement/BlanketOrdersPage";
 import { SupplierProfilePage } from "../features/procurement/SupplierProfilePage";
 import TendersPage from "../features/procurement/TendersPage";
+import { SingleSourcePage } from "../features/procurement/SingleSourcePage";
+import { AdjustmentsPage } from "../features/inventory/AdjustmentsPage";
+import { LandedCostsPage } from "../features/inventory/LandedCostsPage";
+import { MaterialRequisitionsPage } from "../features/inventory/MaterialRequisitionsPage";
+import { ProductionOrdersPage } from "../features/manufacturing/ProductionOrdersPage";
+import { PlanningPage as MfgPlanningPage } from "../features/manufacturing/PlanningPage";
+import { PlansPage } from "../features/manufacturing/PlansPage";
+import { BomsPage } from "../features/manufacturing/BomsPage";
+import { ForecastsPage } from "../features/supply_chain/ForecastsPage";
+import { ReplenishmentPage } from "../features/supply_chain/ReplenishmentPage";
+import { RisksPage as SupplyRisksPage } from "../features/supply_chain/RisksPage";
+import { DemandsPage } from "../features/supply_chain/DemandsPage";
+import { FulfilmentPage } from "../features/supply_chain/FulfilmentPage";
+import { VehiclesPage as ScVehiclesPage } from "../features/supply_chain/VehiclesPage";
+import { SupplyAnalyticsPage } from "../features/supply_chain/SupplyAnalyticsPage";
+import { ShipmentsPage } from "../features/supply_chain/ShipmentsPage";
+import { LogisticsSetupPage } from "../features/supply_chain/LogisticsSetupPage";
+import { LogisticsReportsPage } from "../features/supply_chain/LogisticsReportsPage";
+import { LinesProfilePage } from "../features/manufacturing/LinesProfilePage";
+import { DowntimePage } from "../features/manufacturing/DowntimePage";
+import { AnalyticsPage as MfgAnalyticsPage } from "../features/manufacturing/AnalyticsPage";
+import { WorkCentersPage } from "../features/manufacturing/WorkCentersPage";
+import { InventoryReportsPage } from "../features/inventory/InventoryReportsPage";
+import { ItemSetupPage } from "../features/inventory/ItemSetupPage";
+import { StockControlPage } from "../features/inventory/StockControlPage";
+import { TraceabilityPage } from "../features/inventory/TraceabilityPage";
 import { SupplierRiskPage } from "../features/procurement/SupplierRiskPage";
 import { BudgetsPage } from "../features/procurement/BudgetsPage";
 import { SuppliersPage } from "../features/procurement/SuppliersPage";
@@ -132,6 +173,11 @@ import { OrdersPage } from "../features/sales/OrdersPage";
 import { DeliveriesPage } from "../features/sales/DeliveriesPage";
 import { DeliveryDetailPage } from "../features/sales/DeliveryDetailPage";
 import { AcknowledgementsPage } from "../features/documents/AcknowledgementsPage";
+import { DocumentAdminPage } from "../features/documents/DocumentAdminPage";
+import { DocumentReportsPage } from "../features/documents/DocumentReportsPage";
+import { ExternalPage } from "../features/documents/ExternalPage";
+import { FavouritesPage } from "../features/documents/FavouritesPage";
+import { DisposalPage } from "../features/documents/DisposalPage";
 import { DocumentDetailPage } from "../features/documents/DocumentDetailPage";
 import { DocumentsPage } from "../features/documents/DocumentsPage";
 import { BackordersPage } from "../features/sales/BackordersPage";
@@ -170,10 +216,24 @@ export function TenantApp() {
           <Route path="/app/finance/accounts" element={<AccountsPage />} />
           <Route path="/app/finance/journals" element={<JournalsPage />} />
           <Route path="/app/finance/invoices" element={<InvoicesPage />} />
+          <Route path="/app/finance/ledger" element={<LedgerPage />} />
           <Route path="/app/finance/trial-balance" element={<TrialBalancePage />} />
+          <Route path="/app/crm/pipeline-settings" element={<PipelineSettingsPage />} />
+          <Route path="/app/crm/segments" element={<CrmSegmentsPage />} />
+          <Route path="/app/sales/summary" element={<SalesSummaryPage />} />
+          <Route path="/app/procurement/spend" element={<SpendReportPage />} />
+          <Route path="/app/settings/workflows" element={<WorkflowDefinitionsPage />} />
+          <Route path="/app/settings/audit" element={<TenantAuditPage />} />
+          <Route path="/app/settings/events" element={<EventOutboxPage />} />
+          <Route path="/app/settings/general" element={<TenantSettingsPage />} />
+          <Route path="/app/settings/modules" element={<ModulesPage />} />
+          <Route path="/app/notifications" element={<NotificationsPage />} />
+          <Route path="/app/notifications/preferences" element={<NotificationPreferencesPage />} />
           <Route path="/app/approvals" element={<InboxPage />} />
           <Route path="/app/approvals/requests" element={<RequestsPage currentUserId={me.user.id} />} />
           <Route path="/app/procurement/overview" element={<ProcurementOverviewPage />} />
+          <Route path="/app/procurement/settings" element={<ProcurementSettingsPage />} />
+          <Route path="/app/procurement/product-sourcing" element={<ProductSourcingPage />} />
           <Route path="/app/procurement/analytics" element={<ProcurementAnalyticsPage />} />
           <Route path="/app/procurement/receiving" element={<ReceivingPage />} />
           <Route path="/app/procurement/returns" element={<ReturnsClaimsPage />} />
@@ -181,6 +241,7 @@ export function TenantApp() {
           <Route path="/app/procurement/blanket-orders" element={<BlanketOrdersPage />} />
           <Route path="/app/procurement/suppliers/:id" element={<SupplierProfilePage />} />
           <Route path="/app/procurement/tenders" element={<TendersPage />} />
+          <Route path="/app/procurement/single-source" element={<SingleSourcePage />} />
           <Route path="/app/procurement/supplier-risk" element={<SupplierRiskPage />} />
           <Route path="/app/procurement/budgets" element={<BudgetsPage />} />
           <Route path="/app/procurement/suppliers" element={<SuppliersPage />} />
@@ -201,7 +262,10 @@ export function TenantApp() {
           <Route path="/app/hr/separations" element={<SeparationsPage />} />
           <Route path="/app/hr/organization" element={<OrgPage />} />
           <Route path="/app/hr/monitoring" element={<MonitoringPage />} />
+          <Route path="/app/analytics/kpis" element={<KpisPage />} />
+          <Route path="/app/analytics/reports" element={<ReportsPage />} />
           <Route path="/app/hr/analytics" element={<HrAnalyticsPage />} />
+          <Route path="/app/hr/document-requirements" element={<DocRequirementsPage />} />
           <Route path="/app/hr/imports" element={<ImportPage />} />
           <Route path="/app/hr/learning" element={<LearningPage />} />
           <Route path="/app/hr/cases" element={<CasesPage />} />
@@ -218,7 +282,10 @@ export function TenantApp() {
           <Route path="/app/projects/projects/:id/team" element={<ProjectTeamPage />} />
           <Route path="/app/projects/projects/:id/schedule" element={<ProjectSchedulePage />} />
           <Route path="/app/projects/projects/:id/billing" element={<ProjectBillingPage />} />
+          <Route path="/app/projects/portfolio" element={<PortfolioPage />} />
           <Route path="/app/projects/resource-load" element={<ResourceLoadPage />} />
+          <Route path="/app/assets/lookup" element={<AssetLookupPage />} />
+          <Route path="/app/assets/acquisitions" element={<AcquisitionsReportPage />} />
           <Route path="/app/assets/register" element={<AssetsPage />} />
           <Route path="/app/assets/register/:id" element={<AssetPage />} />
           <Route path="/app/assets/setup" element={<AssetSetupPage />} />
@@ -285,10 +352,36 @@ export function TenantApp() {
           <Route path="/app/inventory/reservations" element={<ReservationsPage />} />
           <Route path="/app/inventory/counts" element={<StockCountsPage />} />
           <Route path="/app/inventory/counts/:id" element={<StockCountPage />} />
+          <Route path="/app/inventory/stock-control" element={<StockControlPage />} />
+          <Route path="/app/inventory/traceability" element={<TraceabilityPage />} />
+          <Route path="/app/inventory/adjustments" element={<AdjustmentsPage />} />
+          <Route path="/app/inventory/landed-costs" element={<LandedCostsPage />} />
+          <Route path="/app/inventory/requisitions" element={<MaterialRequisitionsPage />} />
+          <Route path="/app/inventory/reports" element={<InventoryReportsPage />} />
+          <Route path="/app/inventory/item-setup" element={<ItemSetupPage />} />
+          <Route path="/app/manufacturing/work-centers" element={<WorkCentersPage />} />
+          <Route path="/app/manufacturing/orders" element={<ProductionOrdersPage />} />
+          <Route path="/app/manufacturing/plans" element={<PlansPage />} />
+          <Route path="/app/manufacturing/planning" element={<MfgPlanningPage />} />
+          <Route path="/app/manufacturing/boms" element={<BomsPage />} />
+          <Route path="/app/supply-chain/shipments" element={<ShipmentsPage />} />
+          <Route path="/app/supply-chain/forecasts" element={<ForecastsPage />} />
+          <Route path="/app/supply-chain/replenishment" element={<ReplenishmentPage />} />
+          <Route path="/app/supply-chain/risks" element={<SupplyRisksPage />} />
+          <Route path="/app/supply-chain/demands" element={<DemandsPage />} />
+          <Route path="/app/supply-chain/fulfilment" element={<FulfilmentPage />} />
+          <Route path="/app/supply-chain/vehicles" element={<ScVehiclesPage />} />
+          <Route path="/app/supply-chain/analytics" element={<SupplyAnalyticsPage />} />
+          <Route path="/app/supply-chain/carriers" element={<LogisticsSetupPage />} />
+          <Route path="/app/supply-chain/logistics-reports" element={<LogisticsReportsPage />} />
+          <Route path="/app/manufacturing/lines" element={<LinesProfilePage />} />
+          <Route path="/app/manufacturing/downtime" element={<DowntimePage />} />
+          <Route path="/app/manufacturing/reports" element={<MfgAnalyticsPage />} />
           <Route path="/app/inventory/valuation" element={<ValuationPage />} />
           <Route path="/app/crm/accounts" element={<CrmAccountsPage />} />
           <Route path="/app/crm/accounts/:id" element={<AccountDetailPage />} />
           <Route path="/app/crm/contacts" element={<ContactsPage />} />
+          <Route path="/app/crm/dates" element={<UpcomingDatesPage />} />
           <Route path="/app/crm/leads" element={<LeadsPage />} />
           <Route path="/app/crm/opportunities" element={<OpportunitiesPage />} />
           <Route path="/app/crm/opportunities/:id" element={<OpportunityDetailPage />} />
@@ -306,6 +399,11 @@ export function TenantApp() {
           <Route path="/app/sales/deliveries/:id" element={<DeliveryDetailPage />} />
           <Route path="/app/documents" element={<DocumentsPage />} />
           <Route path="/app/documents/acknowledgements" element={<AcknowledgementsPage />} />
+          <Route path="/app/documents/external" element={<ExternalPage />} />
+          <Route path="/app/documents/setup" element={<DocumentAdminPage />} />
+          <Route path="/app/documents/reports" element={<DocumentReportsPage />} />
+          <Route path="/app/documents/favourites" element={<FavouritesPage />} />
+          <Route path="/app/documents/disposals" element={<DisposalPage />} />
           <Route path="/app/documents/:id" element={<DocumentDetailPage />} />
           <Route path="/app/sales/backorders" element={<BackordersPage />} />
           <Route path="/app/sales/aging" element={<AgingPage />} />
@@ -315,6 +413,7 @@ export function TenantApp() {
           <Route path="/app/sales/analytics" element={<SalesAnalyticsPage />} />
           <Route path="/app/sales/returns" element={<ReturnsPage />} />
           <Route path="/app/sales/pricing" element={<PricingPage />} />
+          <Route path="/app/sales/statements" element={<CustomerStatementPage />} />
           <Route path="/app/sales/orders" element={<OrdersPage />} />
           <Route path="/app/finance/payments" element={<PaymentsPage />} />
           <Route path="/app/finance/profit-loss" element={<ProfitLossPage />} />

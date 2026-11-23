@@ -1,3 +1,4 @@
+import { NotificationBell } from "../features/notifications/NotificationsPage";
 import { useState } from "react";
 import { NavLink, Outlet } from "react-router";
 
@@ -16,6 +17,8 @@ interface NavItem {
 /** Only screens that exist are listed; each is shown only if the user holds its permission (the API enforces it again). */
 const NAV: NavItem[] = [
   { to: "/app/dashboard", label: "Dashboard", permission: "analytics.view" },
+  { to: "/app/analytics/kpis", label: "KPIs", permission: "analytics.view" },
+  { to: "/app/analytics/reports", label: "Reports", permission: "analytics.view" },
   { to: "/app/approvals", label: "Approvals" },
   { to: "/app/approvals/requests", label: "Requests" },
   { to: "/app/finance/accounts", label: "Chart of accounts", permission: "finance.accounts.view" },
@@ -25,16 +28,21 @@ const NAV: NavItem[] = [
   { to: "/app/finance/tax-rates", label: "Tax rates", permission: "finance.accounts.view" },
   { to: "/app/finance/payments", label: "Payments", permission: "finance.invoice.view" },
   { to: "/app/finance/reconciliation", label: "Bank reconciliation", permission: "finance.accounts.view" },
+  { to: "/app/finance/ledger", label: "General ledger", permission: "reports.financial.view" },
   { to: "/app/finance/trial-balance", label: "Trial balance", permission: "reports.financial.view" },
   { to: "/app/finance/profit-loss", label: "Profit and loss", permission: "reports.financial.view" },
   { to: "/app/finance/balance-sheet", label: "Balance sheet", permission: "reports.financial.view" },
   { to: "/app/procurement/overview", label: "Procurement overview", permission: "procurement.view" },
   { to: "/app/procurement/analytics", label: "Procurement analytics", permission: "procurement.view" },
+  { to: "/app/procurement/product-sourcing", label: "Product sourcing", permission: "procurement.view" },
+  { to: "/app/procurement/spend", label: "Spend by supplier", permission: "procurement.view" },
+  { to: "/app/procurement/settings", label: "Procurement settings", permission: "procurement.view" },
   { to: "/app/procurement/receiving", label: "Receiving and inspection", permission: "procurement.view" },
   { to: "/app/procurement/returns", label: "Supplier returns and claims", permission: "procurement.view" },
   { to: "/app/procurement/contracts", label: "Supplier contracts", permission: "procurement.view" },
   { to: "/app/procurement/blanket-orders", label: "Blanket orders", permission: "procurement.view" },
   { to: "/app/procurement/tenders", label: "Tenders", permission: "procurement.view" },
+  { to: "/app/procurement/single-source", label: "Single-source orders", permission: "procurement.view" },
   { to: "/app/procurement/supplier-risk", label: "Supplier risk", permission: "procurement.view" },
   { to: "/app/procurement/budgets", label: "Budgets and plans", permission: "procurement.view" },
   { to: "/app/procurement/requisitions", label: "Requisitions", permission: "procurement.view" },
@@ -49,10 +57,38 @@ const NAV: NavItem[] = [
   { to: "/app/inventory/transfers", label: "Transfers", permission: "inventory.view" },
   { to: "/app/inventory/reservations", label: "Reservations", permission: "inventory.view" },
   { to: "/app/inventory/counts", label: "Stock counts", permission: "inventory.view" },
+  { to: "/app/inventory/stock-control", label: "Stock control", permission: "inventory.view" },
+  { to: "/app/inventory/traceability", label: "Lots & serials", permission: "inventory.view" },
+  { to: "/app/inventory/adjustments", label: "Adjustments", permission: "inventory.stock.adjust" },
+  { to: "/app/inventory/landed-costs", label: "Landed costs", permission: "inventory.view" },
+  { to: "/app/inventory/requisitions", label: "Material requests", permission: "inventory.requisition.create" },
+  { to: "/app/inventory/reports", label: "Inventory reports", permission: "inventory.view" },
+  { to: "/app/inventory/item-setup", label: "Item setup", permission: "inventory.view" },
   { to: "/app/inventory/valuation", label: "Stock valuation", permission: "inventory.view" },
+  { to: "/app/manufacturing/orders", label: "Production orders", permission: "manufacturing.view" },
+  { to: "/app/manufacturing/plans", label: "Production plans", permission: "manufacturing.view" },
+  { to: "/app/manufacturing/planning", label: "Planning & capacity", permission: "manufacturing.view" },
+  { to: "/app/manufacturing/boms", label: "Bills of materials", permission: "manufacturing.view" },
+  { to: "/app/manufacturing/work-centers", label: "Work centres", permission: "manufacturing.view" },
+  { to: "/app/manufacturing/lines", label: "Lines & item profiles", permission: "manufacturing.view" },
+  { to: "/app/manufacturing/downtime", label: "Downtime", permission: "manufacturing.view" },
+  { to: "/app/manufacturing/reports", label: "Manufacturing reports", permission: "manufacturing.view" },
+  { to: "/app/supply-chain/shipments", label: "Shipments", permission: "supply_chain.view" },
+  { to: "/app/supply-chain/forecasts", label: "Demand forecasts", permission: "supply_chain.view" },
+  { to: "/app/supply-chain/replenishment", label: "Replenishment", permission: "supply_chain.view" },
+  { to: "/app/supply-chain/risks", label: "Supply risks", permission: "supply_chain.view" },
+  { to: "/app/supply-chain/demands", label: "Demand", permission: "supply_chain.view" },
+  { to: "/app/supply-chain/fulfilment", label: "Order fulfilment", permission: "supply_chain.view" },
+  { to: "/app/supply-chain/vehicles", label: "Vehicles", permission: "supply_chain.view" },
+  { to: "/app/supply-chain/analytics", label: "Supply chain analytics", permission: "supply_chain.view" },
+  { to: "/app/supply-chain/carriers", label: "Carriers & routes", permission: "supply_chain.view" },
+  { to: "/app/supply-chain/logistics-reports", label: "Logistics reports", permission: "supply_chain.view" },
   { to: "/app/crm/accounts", label: "Accounts", permission: "crm.view" },
   { to: "/app/crm/contacts", label: "Contacts", permission: "crm.view" },
   { to: "/app/crm/leads", label: "Leads", permission: "crm.view" },
+  { to: "/app/crm/pipeline-settings", label: "Pipeline stages", permission: "crm.assign" },
+  { to: "/app/crm/segments", label: "Customer segments", permission: "crm.view" },
+  { to: "/app/crm/dates", label: "Contact dates", permission: "crm.view" },
   { to: "/app/crm/opportunities", label: "Opportunities", permission: "crm.view" },
   { to: "/app/crm/activities", label: "Activities", permission: "crm.view" },
   { to: "/app/crm/campaigns", label: "Campaigns", permission: "crm.campaign.manage" },
@@ -63,6 +99,8 @@ const NAV: NavItem[] = [
   { to: "/app/crm/reports", label: "Sales reports", permission: "crm.view" },
   { to: "/app/sales/quotations", label: "Quotations", permission: "sales.view" },
   { to: "/app/sales/orders", label: "Sales orders", permission: "sales.view" },
+  { to: "/app/sales/summary", label: "Sales summary", permission: "sales.view" },
+  { to: "/app/sales/statements", label: "Customer statements", permission: "sales.view" },
   { to: "/app/sales/pricing", label: "Pricing", permission: "sales.view" },
   { to: "/app/sales/deliveries", label: "Deliveries", permission: "sales.view" },
   { to: "/app/sales/backorders", label: "Backorders", permission: "sales.view" },
@@ -72,7 +110,12 @@ const NAV: NavItem[] = [
   { to: "/app/sales/analytics", label: "Sales analytics", permission: "sales.view" },
   { to: "/app/sales/commissions", label: "Targets and commission", permission: "crm.view" },
   { to: "/app/documents", label: "Documents", permission: "documents.view" },
+  { to: "/app/documents/external", label: "External documents", permission: "documents.view" },
+  { to: "/app/documents/reports", label: "Document reports", permission: "documents.view" },
+  { to: "/app/documents/setup", label: "Document setup", permission: "documents.admin" },
+  { to: "/app/documents/disposals", label: "Document disposal", permission: "documents.disposal.approve" },
   { to: "/app/projects/projects", label: "Projects", permission: "projects.view" },
+  { to: "/app/projects/portfolio", label: "Portfolio", permission: "projects.view" },
   { to: "/app/projects/my-tasks", label: "My tasks", permission: "projects.view" },
   { to: "/app/projects/resource-load", label: "Resource load", permission: "projects.view" },
   { to: "/app/assets/register", label: "Assets", permission: "assets.view" },
@@ -109,6 +152,8 @@ const NAV: NavItem[] = [
   { to: "/app/quality/settings", label: "Quality lists", permission: "quality.admin" },
   { to: "/app/quality/my-actions", label: "My quality actions", permission: "quality.view" },
   { to: "/app/assets/allocations", label: "Allocation and use", permission: "assets.view" },
+  { to: "/app/assets/lookup", label: "Find by code", permission: "assets.view" },
+  { to: "/app/assets/acquisitions", label: "Acquisitions report", permission: "assets.view" },
   { to: "/app/assets/capitalizations", label: "Capitalisation", permission: "assets.view" },
   { to: "/app/hr/leave", label: "Leave", permission: "hr.self" },
   { to: "/app/hr/attendance", label: "Attendance", permission: "hr.self" },
@@ -132,6 +177,7 @@ const NAV: NavItem[] = [
   { to: "/app/hr/organization", label: "Org chart", permission: "hr.self" },
   { to: "/app/hr/monitoring", label: "HR monitoring", permission: "hr.self" },
   { to: "/app/hr/analytics", label: "HR analytics", permission: "hr.analytics.view" },
+  { to: "/app/hr/document-requirements", label: "Required documents", permission: "hr.view" },
   { to: "/app/hr/imports", label: "HR imports", permission: "hr.employee.manage" },
   { to: "/app/organization/company", label: "Company", permission: "org.structure.view" },
   { to: "/app/organization/structure", label: "Structure", permission: "org.structure.view" },
@@ -140,6 +186,11 @@ const NAV: NavItem[] = [
   { to: "/app/organization/numbering", label: "Numbering", permission: "org.sequences.manage" },
   { to: "/app/settings/users", label: "Users", permission: "users.view" },
   { to: "/app/settings/roles", label: "Roles", permission: "roles.view" },
+  { to: "/app/settings/workflows", label: "Approval workflows", permission: "workflow.definitions.manage" },
+  { to: "/app/settings/audit", label: "Audit log", permission: "audit.view" },
+  { to: "/app/settings/events", label: "Integration events", permission: "events.manage" },
+  { to: "/app/settings/general", label: "Workspace settings", permission: "org.settings.manage" },
+  { to: "/app/settings/modules", label: "Modules", permission: "modules.view" },
 ];
 
 export function AppLayout({ me }: { me: TenantMe }) {
@@ -184,6 +235,7 @@ export function AppLayout({ me }: { me: TenantMe }) {
             Menu
           </Button>
           <div className="ml-auto flex items-center gap-3 text-sm">
+            <NotificationBell />
             <span className="text-slate-600">{me.user.display_name || me.user.email}</span>
             <Button variant="secondary" onClick={logout}>
               Sign out

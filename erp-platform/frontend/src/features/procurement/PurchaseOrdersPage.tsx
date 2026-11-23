@@ -1,4 +1,5 @@
 import type { ColumnDef } from "@tanstack/react-table";
+import { printPurchaseOrder } from "./poDocument";
 import { useMemo, useState } from "react";
 
 import { useGetPurchaseOrderQuery, useListPurchaseOrdersQuery, useListWarehousesQuery, usePurchaseOrderActionMutation, useReceiveGoodsMutation } from "../../shared/api/endpoints";
@@ -99,6 +100,7 @@ function Detail({ id, onClose }: { id: string | null; onClose: () => void }) {
             <div className="flex justify-between"><dt>Invoiced so far</dt><dd>{formatMoney(data.invoiced_value)}</dd></div>
           </dl>
           <PoExtras order={data} />
+          <div className="mt-3"><Button variant="secondary" onClick={() => { if (!printPurchaseOrder(data)) setErr("Your browser blocked the print window. Allow pop-ups and try again."); }}>Print order</Button></div>
           {matching && <MatchInvoiceDialog order={data} open onClose={() => setMatching(false)} />}
           {receiving && <ReceivePanel order={data} onDone={() => setReceiving(false)} />}
           {err && <p role="alert" className="mt-3 text-sm text-red-700">{err}</p>}

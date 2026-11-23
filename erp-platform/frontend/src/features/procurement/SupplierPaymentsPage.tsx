@@ -5,6 +5,8 @@ import { errorMessage } from "../../shared/api/errors";
 import type { DueInvoice, SupplierPaymentResult } from "../../shared/api/types";
 import { formatMoney, parseMoney } from "../../shared/lib/money";
 import { Badge, Button, Card, EmptyState, ErrorState, FormField, Modal, PageHeader, Spinner, inputClass } from "../../shared/ui/primitives";
+import { useAccess } from "../../shared/permissions/usePermissions";
+import { DebitNoteDialog } from "./ProcurementTools";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const yearStart = () => `${new Date().getFullYear()}-01-01`;
@@ -65,6 +67,8 @@ function DueSection() {
   const [asOf, setAsOf] = useState(today);
   const [within, setWithin] = useState("7");
   const [paying, setPaying] = useState<DueInvoice | null>(null);
+  const [debiting, setDebiting] = useState<DueInvoice | null>(null);
+  const { can } = useAccess();
   const days = /^\d{1,3}$/.test(within) ? Number(within) : null;
   const { data, isFetching, error, refetch } = useListDueInvoicesQuery({ asOf, withinDays: days ?? 0 }, { skip: !asOf || days === null });
   return (
@@ -91,6 +95,7 @@ function DueSection() {
                   <td className="px-2 py-1 text-right">{formatMoney(r.discount_available)}</td>
                   <td className="px-2 py-1 text-right">{formatMoney(r.wht)}</td>
                   <td className="px-2 py-1 text-right">
+                    {can("procurement.debit_note.create") && <Button variant="secondary" aria-label={`Debit note for ${r.number}`} onClick={() => setDebiting(r)}>Debit note</Button>}{" "}
                     {!r.payable ? <span className="text-xs text-slate-600">No verified bank account</span> : r.standing === "BLACKLISTED" ? <span className="text-xs text-slate-600">Blacklisted</span> : <Button aria-label={`Pay ${r.number}`} onClick={() => setPaying(r)}>Pay…</Button>}
                   </td>
                 </tr>
@@ -100,6 +105,7 @@ function DueSection() {
         </Card>
       ))}
       {paying && <PayDialog row={paying} open onClose={() => setPaying(null)} />}
+      {debiting && <DebitNoteDialog row={debiting} onClose={() => setDebiting(null)} />}
     </>
   );
 }

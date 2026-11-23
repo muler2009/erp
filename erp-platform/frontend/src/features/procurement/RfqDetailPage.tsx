@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ClarificationsPanel } from "./Clarifications";
 import { Link, useParams } from "react-router";
 
 import { useAwardRfqMutation, useGetRfqComparisonQuery, useGetRfqQuery, useRecordQuotationMutation } from "../../shared/api/endpoints";
@@ -138,7 +139,7 @@ export function RfqDetailPage() {
         actions={<Link className="text-sm text-indigo-700 underline" to="/app/procurement/rfqs">All RFQs</Link>} />
       <Card>
         <p className="mb-3 text-sm"><Badge tone={rfqTone(data.status)}>{data.status}</Badge> <span className="ml-2">{data.quotation_count} quotation(s) received</span></p>
-        {data.kind === "TENDER" && <p className="mb-3 text-sm text-slate-600">Tender opening, scoring and committee evaluation are not available in these screens yet.</p>}
+        {data.kind === "TENDER" && <p className="mb-3 text-sm text-slate-600">Tender opening, scoring and committee evaluation are on the Tenders page.</p>}
         {data.sealed ? (
           <p role="status" className="text-sm text-slate-700">The bids are sealed until the tender committee opens them.</p>
         ) : data.quotations.length === 0 ? (
@@ -149,6 +150,7 @@ export function RfqDetailPage() {
         {cmp.error && <p role="alert" className="mt-2 text-sm text-red-700">{errorMessage(cmp.error)}</p>}
         {canRecord && <div className="mt-4 text-right"><Button onClick={() => setRecording(true)}>Record quotation</Button></div>}
       </Card>
+      <ClarificationsPanel rfq={data} />
       <QuotationDialog key={`q-${data.quotation_count}`} rfq={data} open={recording} onClose={() => setRecording(false)} />
       {awarding && <AwardDialog rfq={data} quotationId={awarding} recommended={cmp.data?.lowest_total ?? null} open onClose={() => setAwarding(null)} />}
     </>

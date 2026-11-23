@@ -392,3 +392,45 @@ def test_http_extension_permissions(world, idp, acme):
     assert api["aud"].get(f"/api/v1/manufacturing/analytics/nope{qs}").status_code == 404
     assert api["aud"].get("/api/v1/manufacturing/reports/wip-aging").status_code == 200
     assert api["pm"].post("/api/v1/manufacturing/orders", {"product": str(e["frame"].id), "quantity": "1", "location": str(e["loc"].id), "planned_start": "2026-11-16"}).status_code == 201
+
+
+@pytest.mark.django_db
+def test_order_detail_exposes_pause_approval_receipt_and_priority_fields(e):
+    from modules.manufacturing import views as mv
+
+    o = run_order(e)
+    a = pm(e)
+    od.issue_all(a, o.id)
+    op = o.operations.get()
+    od.start_operation(a, o.id, op.id, operator_id=e["pm2"].id)
+    ex.pause_operation(a, o.id, op.id, reason="Power cut")
+    d = mv._order(mm.ProductionOrder.objects.get(pk=o.id), True)
+    assert d["priority"] == 3 and d["is_rework"] is False
+    assert d["operations"][0]["is_paused"] is True and d["operations"][0]["approved"] is False
+    ex.resume_operation(a, o.id, op.id)
+    d = mv._order(mm.ProductionOrder.objects.get(pk=o.id), True)
+    assert d["operations"][0]["is_paused"] is False
+
+
+@pytest.mark.django_db
+def test_http_patch_draft_bom_saves_byproducts_and_effective_window(world, idp, acme):
+    tenant = Tenant.objects.get(pk=acme["id"])
+    with schema_context(acme["schema"]):
+        e = make_env(tenant)
+        ExternalIdentity.objects.create(user=e["pm"], issuer="https://kc.test/realms/erp", subject="mx-bom-pm")
+        b = frame_bom(e, approve=False)
+    api = Api(ACME_HOST)
+    assert api.login(idp, "mx-bom-pm").status_code == 302
+    r = api.patch(f"/api/v1/manufacturing/boms/{b.id}", {"byproducts": [{"product": str(e["bolt"].id), "quantity": "2"}], "effective_from": "2026-12-01", "effective_to": "2026-12-31"})
+    assert r.status_code == 200, r.content
+    d = r.json()
+    assert d["byproducts"] == [{"product": str(e["bolt"].id), "sku": e["bolt"].sku, "quantity": "2.0000"}]
+    assert (d["effective_from"], d["effective_to"]) == ("2026-12-01", "2026-12-31")
+    # omitting the keys leaves them alone
+    d = api.patch(f"/api/v1/manufacturing/boms/{b.id}", {"name": "Frame v1"}).json()
+    assert d["name"] == "Frame v1" and d["effective_from"] == "2026-12-01" and len(d["byproducts"]) == 1
+    # clearing the window and by-products
+    d = api.patch(f"/api/v1/manufacturing/boms/{b.id}", {"byproducts": [], "effective_from": None, "effective_to": None}).json()
+    assert d["byproducts"] == [] and d["effective_from"] is None
+    bad = api.patch(f"/api/v1/manufacturing/boms/{b.id}", {"effective_from": "2026-12-31", "effective_to": "2026-12-01"})
+    assert bad.status_code == 400

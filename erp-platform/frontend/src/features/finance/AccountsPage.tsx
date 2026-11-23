@@ -7,9 +7,10 @@ import { z } from "zod";
 import { useCreateAccountMutation, useListAccountsQuery } from "../../shared/api/endpoints";
 import { errorMessage, fieldErrors } from "../../shared/api/errors";
 import type { Account } from "../../shared/api/types";
-import { Can } from "../../shared/permissions/usePermissions";
+import { Can, useAccess } from "../../shared/permissions/usePermissions";
 import { DataTable } from "../../shared/ui/DataTable";
 import { Badge, Button, FormField, Modal, PageHeader, inputClass } from "../../shared/ui/primitives";
+import { AccountEditDialog } from "./AccountEdit";
 
 const TYPES = ["ASSET", "LIABILITY", "EQUITY", "REVENUE", "EXPENSE"] as const;
 export const accountSchema = z.object({
@@ -72,14 +73,18 @@ function CreateDialog({ open, onClose }: { open: boolean; onClose: () => void })
 }
 
 export function AccountsPage() {
+  const { can } = useAccess();
+  const [editing, setEditing] = useState<string | null>(null);
+  const cols = can("finance.accounts.manage") ? [...columns, { header: "", id: "edit", cell: ({ row }: { row: { original: Account } }) => <Button variant="secondary" aria-label={`Edit account ${row.original.code}`} onClick={() => setEditing(row.original.id)}>Edit</Button> } as ColumnDef<Account>] : columns;
   const [cursor, setCursor] = useState<string | null>(null);
   const { data, isLoading, error, refetch } = useListAccountsQuery({ cursor });
   const [creating, setCreating] = useState(false);
   return (
     <>
       <PageHeader title="Chart of accounts" actions={<Can permission="finance.accounts.manage"><Button onClick={() => setCreating(true)}>New account</Button></Can>} />
-      <DataTable caption="Chart of accounts" columns={columns} page={data} isLoading={isLoading} error={error} onRetry={refetch} emptyTitle="No accounts yet" onCursor={setCursor} hasPrevious={cursor !== null} onFirst={() => setCursor(null)} />
+      <DataTable caption="Chart of accounts" columns={cols} page={data} isLoading={isLoading} error={error} onRetry={refetch} emptyTitle="No accounts yet" onCursor={setCursor} hasPrevious={cursor !== null} onFirst={() => setCursor(null)} />
       <CreateDialog open={creating} onClose={() => setCreating(false)} />
+      {editing && <AccountEditDialog id={editing} onClose={() => setEditing(null)} />}
     </>
   );
 }

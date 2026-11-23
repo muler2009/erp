@@ -303,3 +303,25 @@ def test_http_permissions(world, idp, acme, f):
         assert api["emp"].get(f"/api/v1/supply-chain/{path}{qs}").status_code == 403
     assert api["aud"].get("/api/v1/supply-chain/reports/costs").status_code == 400
     assert api["aud"].get("/api/v1/supply-chain/fulfilment").status_code == 200
+
+
+@pytest.mark.django_db
+def test_shipment_detail_exposes_line_ids_usable_for_delivery(f):
+    from modules.supply_chain import views as scv
+
+    s = ship(f)
+    lg.dispatch(uid(f), s.id)
+    d = scv._ship(s, True)
+    line = d["lines"][0]
+    assert line["id"] == str(s.lines.get().id)
+    done = lg.deliver(uid(f), s.id, received_by="Abebe", lines=[{"line": line["id"], "received": 1, "damaged": 0, "note": "one short"}])
+    assert done.lines.get().received_quantity == 1
+    assert done.exceptions.filter(kind="SHORTAGE").exists()
+
+
+@pytest.mark.django_db
+def test_forecast_rows_carry_the_product_sku(f):
+    from modules.supply_chain import views as scv
+
+    fc = pl.set_forecast(uid(f, "planner"), product_id=f["widget"].id, period_start=date(2026, 7, 1), quantity=5)
+    assert scv._fc(fc)["sku"] == f["widget"].sku

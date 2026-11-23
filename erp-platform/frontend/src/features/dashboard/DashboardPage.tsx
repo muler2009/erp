@@ -1,6 +1,9 @@
 import { useState } from "react";
 
-import { useGetDashboardQuery, useListDashboardsQuery, useSeedDashboardsMutation } from "../../shared/api/endpoints";
+import { AddWidgetDialog, DashboardDialog } from "../analytics/DashboardEditor";
+import { errorMessage } from "../../shared/api/errors";
+
+import { useDeleteBiWidgetMutation, useGetDashboardQuery, useListDashboardsQuery, useSeedDashboardsMutation, useUpdateBiWidgetMutation } from "../../shared/api/endpoints";
 import type { KpiView, WidgetData } from "../../shared/api/types";
 import { formatNumber } from "../../shared/lib/format";
 import { Can } from "../../shared/permissions/usePermissions";
@@ -82,10 +85,19 @@ export function DashboardPage() {
   const activeId = picked ?? list.data?.[0]?.id ?? null;
   const view = useGetDashboardQuery(activeId ?? "", { skip: !activeId });
   const [seed, seeding] = useSeedDashboardsMutation();
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [moveWidget] = useUpdateBiWidgetMutation();
+  const [removeWidget] = useDeleteBiWidgetMutation();
+  const [editErr, setEditErr] = useState<string | null>(null);
+  const failed = (e: unknown) => setEditErr(errorMessage(e));
+  const active = list.data?.find((d) => d.id === activeId) ?? null;
 
   return (
     <>
-      <PageHeader title="Dashboard" description="Key figures you are allowed to see." />
+      <PageHeader title="Dashboard" description="Key figures you are allowed to see." actions={<Can permission="analytics.dashboard.manage"><Button onClick={() => setCreating(true)}>New dashboard</Button></Can>} />
+      {creating && <DashboardDialog dashboard={null} open onClose={() => setCreating(false)} onSaved={(id) => setPicked(id)} />}
       {list.isLoading && <Spinner />}
       {list.error && <ErrorState error={list.error} onRetry={list.refetch} />}
       {list.data && list.data.length === 0 && (
@@ -116,6 +128,15 @@ export function DashboardPage() {
               </button>
             ))}
           </div>
+          <Can permission="analytics.dashboard.manage">
+            <div className="mb-3 flex flex-wrap gap-2">
+              <Button variant="secondary" onClick={() => setAdding(true)}>Add widget</Button>
+              <Button variant="secondary" onClick={() => setEditing(true)}>Change dashboard</Button>
+            </div>
+            {editErr && <p role="alert" className="mb-2 text-sm text-red-700">{editErr}</p>}
+            {adding && activeId && <AddWidgetDialog dashboard={activeId} open onClose={() => setAdding(false)} />}
+            {editing && active && <DashboardDialog key={active.id} dashboard={active} open onClose={() => setEditing(false)} onSaved={() => setPicked(null)} />}
+          </Can>
           {view.isFetching && <Spinner />}
           {view.error && <ErrorState error={view.error} onRetry={view.refetch} />}
           {view.data && (
@@ -125,6 +146,13 @@ export function DashboardPage() {
                 .map((w) => (
                   <Card key={w.id} title={w.title}>
                     <Widget w={w} />
+                    <Can permission="analytics.dashboard.manage">
+                      <div className="mt-3 flex gap-2 border-t border-slate-100 pt-2">
+                        <Button variant="secondary" aria-label={`Move ${w.title} earlier`} onClick={() => { const s = [...(view.data?.widgets ?? [])].sort((a, b) => a.position - b.position); const i = s.findIndex((x) => x.id === w.id); const o = s[i - 1]; if (o) { setEditErr(null); Promise.all([moveWidget({ id: w.id, body: { position: o.position } }).unwrap(), moveWidget({ id: o.id, body: { position: w.position } }).unwrap()]).catch(failed); } }}>Earlier</Button>
+                        <Button variant="secondary" aria-label={`Move ${w.title} later`} onClick={() => { const s = [...(view.data?.widgets ?? [])].sort((a, b) => a.position - b.position); const i = s.findIndex((x) => x.id === w.id); const o = s[i + 1]; if (o) { setEditErr(null); Promise.all([moveWidget({ id: w.id, body: { position: o.position } }).unwrap(), moveWidget({ id: o.id, body: { position: w.position } }).unwrap()]).catch(failed); } }}>Later</Button>
+                        <Button variant="danger" aria-label={`Remove ${w.title}`} onClick={() => { setEditErr(null); removeWidget(w.id).unwrap().catch(failed); }}>Remove</Button>
+                      </div>
+                    </Can>
                   </Card>
                 ))}
             </div>

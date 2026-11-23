@@ -61,6 +61,13 @@ export interface KpiView {
   unit: string;
   direction: "HIGHER" | "LOWER";
   target: string | null;
+  warn_at?: string | null;
+  critical_at?: string | null;
+  metric?: string;
+  module?: string | null;
+  params?: Record<string, string | number>;
+  is_active?: boolean;
+  is_system?: boolean;
   restricted: boolean;
   latest: KpiSnapshot | null;
   previous: KpiSnapshot | null;
@@ -73,12 +80,14 @@ export interface DashboardSummary {
   name: string;
   description: string;
   is_system: boolean;
+  visibility?: "PRIVATE" | "ALL" | "ROLES";
+  roles?: string[];
 }
 
 export type WidgetData =
-  | { id: string; kind: "KPI"; title: string; position: number; restricted: boolean; missing?: boolean; data: KpiView | null }
-  | { id: string; kind: "TREND"; title: string; position: number; restricted: boolean; missing?: boolean; data: { kpi: KpiView; series: KpiSnapshot[] } | null }
-  | { id: string; kind: "DATASET"; title: string; position: number; restricted: boolean; missing?: boolean; data: { rows: Record<string, unknown>[]; total_rows: number; params: Record<string, string> } | null };
+  | { id: string; kind: "KPI"; title: string; position: number; config?: Record<string, unknown>; restricted: boolean; missing?: boolean; data: KpiView | null }
+  | { id: string; kind: "TREND"; title: string; position: number; config?: Record<string, unknown>; restricted: boolean; missing?: boolean; data: { kpi: KpiView; series: KpiSnapshot[] } | null }
+  | { id: string; kind: "DATASET"; title: string; position: number; config?: Record<string, unknown>; restricted: boolean; missing?: boolean; data: { rows: Record<string, unknown>[]; total_rows: number; params: Record<string, string> } | null };
 
 export interface DashboardView extends DashboardSummary {
   widgets: WidgetData[];
@@ -178,7 +187,7 @@ export interface PurchaseOrder {
 
 export interface Product {
   id: string; sku: string; name: string; uom: string; barcode: string | null; category: string; tracking: "NONE" | "LOT" | "SERIAL";
-  is_stocked: boolean; is_active: boolean; on_hand: string; min_stock?: string | null; reorder_level?: string | null; status?: string;
+  is_stocked: boolean; is_active: boolean; on_hand: string; min_stock?: string | null; max_stock?: string | null; safety_stock?: string | null; reorder_level?: string | null; status?: string; description?: string;
 }
 export interface WarehouseLocation { id: string; code: string; kind: string; zone: string; aisle: string; rack: string; shelf: string; bin: string; capacity: string | null; is_blocked: boolean }
 export interface Warehouse { id: string; code: string; name: string; is_active: boolean; warehouse_type: string; address: string; locations: WarehouseLocation[] }
@@ -204,7 +213,7 @@ export interface Lead { id: string; name: string; company: string; email: string
 export interface PipelineStage { code: string; name: string; probability: number; is_won: boolean; is_lost: boolean }
 export interface Opportunity { id: string; name: string; account: string; stage: string; probability: number; amount: string; currency: string; status: "OPEN" | "WON" | "LOST"; expected_close: string | null; owner_id: string; lost_reason: string; next_action: string; next_action_date: string | null }
 export interface SalesLine { id: string; line_no: number; product: string | null; description: string; quantity: string; unit_price: string; discount_percent: string; net_unit_price: string; line_total: string; tax_amount: string; delivered_quantity?: string; returned_quantity?: string; invoiced_quantity?: string }
-export interface Quotation { id: string; number: string; account: string; currency: string; status: string; valid_until: string | null; subtotal: string; tax_total: string; total: string; version: number; lines?: SalesLine[] }
+export interface Quotation { id: string; number: string; account: string; currency: string; status: string; valid_until: string | null; subtotal: string; tax_total: string; total: string; version: number; opportunity?: string | null; payment_terms?: string; delivery_terms?: string; terms?: string; notes?: string; max_discount?: string; approved_by?: string | null; lines?: SalesLine[] }
 export interface SalesOrder { id: string; number: string; account: string; currency: string; order_date: string; status: string; subtotal: string; tax_total: string; total: string; approval_required: boolean; workflow_instance_id: string | null; version: number; hold_reason: string; lines?: SalesLine[] }
 
 export interface Partner { id: string; name: string; is_customer: boolean; is_supplier: boolean; tax_id: string }
@@ -586,12 +595,12 @@ export interface SalesPerformance { period: [string, string]; orders: number; re
 export interface SalesBacklog { to_deliver: string; to_invoice: string; orders: number; oldest: { order: string; customer: string; age_days: number; to_deliver: string; to_invoice: string }[] }
 export interface SalesForecast { months: number; backlog: string; worst: string; likely: string; best: string; monthly_run_rate: string; run_rate_over_horizon: string; pipeline_by_month: Record<string, { worst: string; likely: string; best: string }> }
 
-export interface DocCategory { id: string; code: string; name: string; doc_type: string; is_controlled: boolean; requires_expiry: boolean; review_interval_days: number | null; retention_years: number | null; is_active: boolean }
+export interface DocCategory { number_prefix?: string; number_padding?: number; default_classification?: string | null; parent?: string | null; id: string; code: string; name: string; doc_type: string; is_controlled: boolean; requires_expiry: boolean; review_interval_days: number | null; retention_years: number | null; is_active: boolean }
 export interface DocFolder { id: string; name: string; parent: string | null; is_active: boolean }
 export interface DocClassification { code: string; name: string; rank: number }
 export interface DocVersion { id: string; number: number; label: string; status: "DRAFT" | "UNDER_REVIEW" | "CHANGES_REQUESTED" | "APPROVED" | "PUBLISHED" | "SUPERSEDED" | "REJECTED" | "WITHDRAWN"; change_reason: string; file_name: string; size: number; created_by: string; created_at: string; submitted_at: string | null; published_at: string | null; rejection_note: string }
 export interface DocRow { id: string; reference: string; title: string; status: string; category: string; category_name: string; classification: string; owner: string; folder: string | null; tags: string[]; current_version: { id: string; label: string; file_name: string; published_at: string | null } | null; effective_date: string | null; expiry_date: string | null; next_review_date: string | null; expired: boolean; review_overdue: boolean; legal_hold: boolean; is_obsolete: boolean; is_template: boolean; pending_revision: { id: string; label: string; status: string } | null; can?: Record<string, boolean> }
-export interface DocDetail extends DocRow { description: string; origin: string; versions: DocVersion[]; links: { id: string; type: string; ref_id: string; label: string }[]; history?: { action: string; from: string | null; to: string | null; by: string | null; note: string; at: string; version: string | null }[]; approvals?: { version: string; action: string; round: number; stage: number; by: string | null; comment: string; at: string }[]; related: { id: string; reference: string; title: string }[] }
+export interface DocDetail extends DocRow { retention_until?: string | null; description: string; origin: string; versions: DocVersion[]; links: { id: string; type: string; ref_id: string; label: string }[]; history?: { action: string; from: string | null; to: string | null; by: string | null; note: string; at: string; version: string | null }[]; approvals?: { version: string; action: string; round: number; stage: number; by: string | null; comment: string; at: string }[]; related: { id: string; reference: string; title: string }[] }
 export interface DocComment { id: string; document: string; version: string | null; author: string; comment: string; response: string; status: string; at: string }
 export interface PendingAck { document: string; reference: string; title: string; version: string; due_date: string | null }
 
@@ -645,3 +654,196 @@ export interface TenderInput { title: string; lines: { description: string; quan
 export interface TenderEvalRow { quotation: string; supplier: string; total_base: string; scores: Record<string, number>; weighted_score: string | number | null; compliant: boolean; issues: string[]; rank: number | null }
 export interface TenderEvaluation { rfq: string; criteria: TenderCriterion[]; results: TenderEvalRow[]; recommended: string | null }
 export interface BidderResult { supplier: string; outcome: "AWARDED" | "DISQUALIFIED" | "NOT_SELECTED"; rank: number | null; weighted_score: string | number | null; reason: string }
+
+export interface RfqClarification { id: string; supplier: string | null; question: string; answer: string }
+export interface SingleSourceRow { po: string; supplier: string; total: string; currency: string; justification: string; status: string }
+export interface SingleSourceInput { supplier: string; currency: string; order_date: string; justification: string; lines: { description: string; quantity: string; unit_price: string }[] }
+
+export interface StockAlertRow { sku: string; name: string; alert: string; on_hand?: string; threshold?: string; lot?: string; location?: string; quantity?: string; expiry_date?: string }
+export interface AgeingStockRow { sku: string; name: string; buckets: Record<string, string>; oldest_days: number | null }
+export interface SlowMovingRow { sku: string; name: string; on_hand: string; last_issue: string | null; value: string; classification: "SLOW_MOVING" | "OBSOLETE_CANDIDATE" }
+export interface ExcessRow { sku: string; name: string; on_hand: string; excess_quantity: string; reason: string }
+export interface ReorderRow { sku: string; warehouse: string; on_hand: string; min_quantity: string; suggested_order_quantity: string }
+export interface ExpiredRow { sku: string; lot: string; location: string; quantity: string; expiry_date: string }
+export interface LotTraceData { lot: string; status: "AVAILABLE" | "QUARANTINED" | "BLOCKED" | "RECALLED"; expiry_date: string | null; received: { ref_type: string; ref_id: string; quantity: string; location: string }[]; on_hand: { location: string; quantity: string }[]; issued: { ref_type: string; ref_id: string; quantity: string; at: string }[] }
+export interface SerialData { serial: string; status: string; location: string | null; received_ref: string; issued_ref: string; warranty_until: string | null }
+
+export interface AdjustmentRequestRow { id: string; number: string; sku: string; location: string; delta: string; estimated_value: string; reason_code: string; reason: string; status: "PENDING" | "POSTED" | "REJECTED"; requested_by: string | null; decided_by: string | null }
+export interface AdjustmentInput { product: string; location: string; delta?: string; counted_quantity?: string; lot_code?: string; unit_cost?: string; reason_code: string; reason: string }
+export interface LandedCostRow { id: string; number: string; ref_type: string; ref_id: string; description: string; amount: string; basis: "VALUE" | "QUANTITY"; allocations: { sku: string; share: string; to_inventory: string; to_cogs: string }[] }
+export interface LandedCostInput { ref_type: string; ref_id: string; amount: string; description: string; basis: "VALUE" | "QUANTITY"; date?: string }
+
+export interface MatReqRow { id: string; number: string; status: string; warehouse: string; destination_type: string }
+export interface MatReqDetail extends MatReqRow { destination_ref: string; purpose: string; requester: string; approved_by: string | null; needed_by: string | null; lines: { id: string; sku: string; quantity: string; issued: string; returned: string; backorder: string }[]; vouchers: { id: string; number: string; lines: { id: string; sku: string; quantity: string; unit_cost: string; returned: string }[] }[]; availability?: { line: string; sku: string; requested: string; available: string }[] }
+export interface MatReqInput { warehouse: string; destination_type: string; destination_ref: string; purpose: string; needed_by?: string; lines: { product: string; quantity: string }[] }
+
+export interface InvReportData { rows: Record<string, string | number | null>[]; extra: Record<string, unknown> }
+export interface UtilisationRow { warehouse: string; location: string; kind: string; used: string; capacity: string | null; utilisation_pct: string | null }
+export interface PickLine { location: string; lot_code: string; quantity: string; expiry_date: string | null }
+export interface UomData { units: { code: string; name: string }[]; conversions: { product: string | null; from: string; to: string; factor: string }[] }
+export interface ItemCategory { id: string; code: string; name: string; parent: string | null }
+
+export interface WorkCenterRow { id: string; code: string; name: string; capacity_hours_per_day: string; labor_rate: string; machine_rate: string; overhead_rate: string; efficiency_percent: string; is_active: boolean }
+export interface WorkCenterInput { code?: string; name: string; capacity_hours_per_day: string; labor_rate: string; machine_rate: string; overhead_rate: string; efficiency_percent: string; is_active?: boolean }
+export interface BomRow { id: string; product: string; sku: string; version: number; name: string; quantity: string; status: "DRAFT" | "ACTIVE" | "ARCHIVED"; created_by: string; approved_by: string | null }
+export interface BomDetail extends BomRow {
+  lines: { component: string; sku: string; quantity: string; scrap_percent: string; substitutes: { product: string; ratio: string; sku?: string }[] }[];
+  steps: { sequence: number; name: string; work_center: string; setup_hours: string; run_hours: string }[];
+  checks: { name: string; step_sequence: number | null; specification: string; lower_limit: string | null; upper_limit: string | null }[];
+  standard_cost: string; effective_from: string | null; effective_to: string | null; byproducts: { product: string; quantity: string; sku?: string }[];
+}
+export interface BomInput {
+  product?: string; name: string; quantity: string;
+  lines: { component: string; quantity: string; scrap_percent: string; substitutes?: { product: string; ratio: string }[] }[];
+  steps: { sequence: number; name: string; work_center: string; setup_hours: string; run_hours: string }[];
+  checks: { name: string; step_sequence: number | null; specification: string; lower_limit?: string; upper_limit?: string }[];
+  byproducts?: { product: string; quantity: string }[]; effective_from?: string | null; effective_to?: string | null;
+}
+export interface Explosion { requirements: { product: string; sku: string; quantity: string; level: number; make: boolean }[]; where_used: string[] }
+
+export interface ProdOrderRow { id: string; number: string; product: string; sku: string; bom: string; quantity: string; status: string; planned_start: string; planned_end: string; produced_quantity: string; scrapped_quantity: string; standard_unit_cost: string }
+export interface ProdOrderDetail extends ProdOrderRow {
+  components: { id: string; product: string; sku: string; required: string; issued: string; returned: string }[];
+  operations: { id: string; sequence: number; name: string; work_center: string; status: string; planned_hours: string; actual_hours: string; planned_start: string | null; planned_end: string | null; is_paused?: boolean; approved?: boolean }[];
+  checks: { id: string; name: string; step_sequence: number | null; result: string; specification: string }[];
+  receipts: { id?: string; status?: string; quantity: string; unit_cost: string; lot_code: string }[]; priority?: number; is_rework?: boolean;
+  availability?: { product: string; sku: string; required: string; issued: string; on_hand: string; short: string }[];
+}
+export interface ProdOrderInput { product: string; quantity: string; location: string; planned_start?: string; planned_end?: string }
+export interface OrderCostData { order: string; status: string; quantity: string; produced: string; scrapped: string; standard_unit_cost: string; material_cost: string; conversion_cost: string; actual_cost: string; actual_unit_cost: string | null; standard_cost_of_output: string; scrap_cost: string; variance: string; by_operation: { sequence: number; name: string; planned_hours: string; actual_hours: string; cost: string }[] }
+export type ProdOrderAction = { id: string; path: string; body?: Record<string, unknown> };
+
+export interface PlanRow { id: string; number: string; name: string; period_start: string; period_end: string; status: string; revision: number; created_by: string; approved_by: string | null }
+export interface PlanDetail extends PlanRow { lines: { id: string; product: string; sku: string; quantity: string; required_date: string; priority: number; order: string | null }[]; revisions: { revision: number; changed_by: string; reason: string }[] }
+export interface PlanInput { name: string; period_start: string; period_end: string; lines: { product: string; quantity: string; required_date: string; priority?: number }[] }
+export interface PlanSuggestion { product: string; sku: string; quantity: string; required_date: string }
+export interface PlanCheckResult { plan: string; feasible: boolean; material_shortages: { sku: string; required: string; available: string; short: string }[]; capacity: { work_center: string; plan_hours: string; already_committed_hours: string; capacity_hours: string; utilization_percent: string | null; bottleneck: boolean }[] }
+export interface MrpSuggestion { product: string; sku: string; action: string; quantity: string; need_by: string; start_by: string; lead_days: number }
+export interface LoadRow { work_center: string; planned_hours: string; capacity_hours: string; utilization_percent: string; overloaded: boolean }
+export interface ConflictRow { work_center: string; date: string; planned_hours: string; capacity_hours: string }
+export interface ScheduleRow { order: string; product: string; status: string; start: string; end: string; operations: { sequence: number; work_center: string; start: string | null; end: string | null; status: string }[] }
+export interface WipData { total: string; orders: { order: string; product: string; status: string; wip_value: string }[] }
+export interface WipAgeRow { order: string; product: string; status: string; current_operation: string | null; work_center: string | null; age_days: number }
+
+export interface DowntimeRow { id: string; work_center: string; category: string; reason: string; started_at: string; ended_at: string | null; minutes: number | null; breakdown_id: string | null }
+export interface ProdLineRow { id: string; code: string; name: string; facility: string }
+
+export interface CarrierRow { id: string; code: string; name: string; mode: string; contact: string; is_active: boolean }
+export interface RouteRow { id: string; code: string; name: string; origin: string; destination: string; distance_km: string; transit_days: number; carrier: string | null; is_active: boolean }
+export interface ShipmentExceptionRow { id: string; shipment: string; kind: string; severity: string; description: string; status: string; resolution: string; auto_detected: boolean }
+export interface ShipmentRow { id: string; number: string; kind: string; status: string; carrier: string | null; route: string | null; origin: string; destination: string; planned_dispatch: string; planned_arrival: string; actual_dispatch: string | null; actual_arrival: string | null; tracking_ref: string; weight_kg: string; pod_received_by: string; pod_at: string | null; vehicle_ref?: string | null; consolidated_into?: string | null; sales_delivery_id?: string | null; purchase_order_id?: string | null; transfer_order_id?: string | null }
+export interface ShipmentDetail extends ShipmentRow {
+  lines: { id: string; product: string | null; description: string; quantity: string; received: string | null; damaged: string; discrepancy_note: string }[];
+  events: { status: string; location: string; note: string; at: string }[];
+  costs: { type: string; amount: string; description: string }[];
+  exceptions: ShipmentExceptionRow[];
+}
+export interface ShipmentInput { kind: string; origin: string; destination: string; planned_dispatch: string; planned_arrival?: string; carrier?: string; route?: string; weight_kg?: string; tracking_ref?: string; lines: { product?: string; description?: string; quantity: string }[] }
+
+export interface DemandForecastRow { id: string; product: string; sku: string; period_start: string; quantity: string; method: string; status: string }
+export interface ForecastAccuracyRow { product: string; period: string; forecast: string; actual: string; error_pct: string | null }
+export interface SuggestionRow { id: string; product: string; sku: string; action: string; quantity: string; need_by: string; start_by: string; lead_days: number; supplier_id: string | null; status: string; note: string; converted_ref_type: string; converted_ref_id: string | null }
+export interface SupplyPlanRow { id: string; number: string; plan_date: string; status: string; revision: number; created_by: string; approved_by: string | null }
+export interface SupplyPlanDetail extends SupplyPlanRow {
+  balance: { items?: { product: string; sku: string; available: string; inbound: string; demand: string; projected: string; shortage: string; surplus: string }[] };
+  suggestions: SuggestionRow[];
+  changes: { revision: number; suggestion: string; field: string; old: string; new: string; reason: string; by: string; at: string }[];
+}
+
+export interface SupplyRiskRow { id: string; number: string; category: string; title: string; description: string; supplier: string | null; product: string | null; likelihood: number; impact: number; score: number; financial_impact: string; status: string; owner: string }
+export interface RiskActionRow { id: string; risk: string; description: string; owner: string; due_date: string; status: string }
+export interface DisruptionRow { id: string; category: string; title: string; cause: string; started_on: string; ended_on: string | null; financial_impact: string; status: string; resolution?: string }
+export interface SupplyRiskDetail extends SupplyRiskRow { actions: RiskActionRow[]; disruptions: DisruptionRow[] }
+export interface CriticalMaterialRow { product: string; reason: string; sources: number; required_sources: number; single_source: boolean; at_risk: boolean }
+export interface RiskInput { category: string; title: string; likelihood: number; impact: number; owner: string; description?: string; supplier?: string; product?: string; financial_impact?: string }
+
+export interface DemandRow { id: string; product: string; sku: string; warehouse: string | null; source: string; source_ref: string; customer: string; kind: string; quantity: string; required_date: string; priority: number; status: string; revision: number; approved_by: string | null; cancel_reason: string }
+export interface DemandDetail extends DemandRow { revisions: { revision: number; old_quantity: string; old_required_date: string; old_priority: number; reason: string; by: string; at: string }[] }
+export interface DemandInput { product: string; quantity: string; required_date: string; source: string; source_ref?: string; customer?: string; kind: string; priority: number; warehouse?: string }
+export interface ScVehicleRow { id: string; code: string; plate: string; vehicle_type: string; capacity_kg: string; capacity_m3: string; carrier: string | null; is_active: boolean }
+export interface FulfilmentOrder { order: string; order_id: string; customer: string; status: string; fulfilment: string; lines: { line: number; product: string; sku: string; open: string; reserved: string; short: string }[]; in_transit_deliveries: number; shipments: { number: string; status: string; planned_arrival: string }[] }
+export interface WarehouseAvailability { warehouse: string; [k: string]: unknown }
+
+// ---- Business intelligence: datasets, saved reports, schedules, run log
+export interface BiDatasetInfo { code: string; title: string; module: string; params: Record<string, string | string[]> }
+export interface BiMetricInfo { code: string; label: string; module: string; unit: string; direction: string }
+export interface BiCatalog { datasets: BiDatasetInfo[]; metrics: BiMetricInfo[] }
+export interface BiFilter { column: string; op: string; value: string }
+export interface BiSort { column: string; desc?: boolean }
+export interface BiRunResult { dataset?: string; title?: string; report?: string; params: Record<string, string>; row_count: number; rows: Record<string, unknown>[]; truncated: boolean }
+export interface BiReportRow { id: string; name: string; description: string; dataset: string; params: Record<string, string>; columns: string[]; filters: BiFilter[]; sort: BiSort[]; owner_id: string; shared: boolean; is_active: boolean }
+export interface BiReportInput { name: string; description?: string; dataset: string; params: Record<string, string>; columns: string[]; filters: BiFilter[]; sort: BiSort[]; shared: boolean }
+export interface BiScheduleRow { id: string; report_id: string; report: string; frequency: string; weekday: number | null; day_of_month: number | null; fmt: string; recipients: string[]; next_run_on: string; last_run_on: string | null; last_status: string; last_error: string; owner_id: string; is_active: boolean }
+export interface BiScheduleInput { report_id: string; frequency: string; weekday?: number; day_of_month?: number; fmt: string; recipients: string[] }
+export interface BiRunLogRow { id: string; report_id: string | null; schedule_id: string | null; dataset: string; fmt: string; row_count: number; status: string; error: string; file_id: string | null; requested_by: string; delivered_to: string[]; created_at: string }
+export interface BiDatasetArgs { code: string; params: Record<string, string>; columns?: string[]; filters?: BiFilter[]; sort?: BiSort[] }
+
+export interface BiKpiInput { code?: string; name: string; description?: string; metric?: string; params?: Record<string, string | number>; unit?: string; direction: string; target: string | null; warn_at: string | null; critical_at: string | null; is_active?: boolean }
+export interface BiDashboardInput { code?: string; name: string; description?: string; visibility: string; roles: string[]; is_active?: boolean }
+export interface BiWidgetInput { kind: string; title: string; position?: number; config: Record<string, unknown> }
+
+// ---- Documents: lifecycle, disposal, access, saved searches
+export interface DocDisposalRow { id: string; document: string; reference: string; status: "PENDING" | "APPROVED" | "REJECTED" | "DONE" | string; reason: string; requested_by: string; decided_by: string | null; decision_note: string }
+export interface DocGrantRow { id: string; document: string | null; folder: string | null; subject_type: string; subject_id: string; actions: string[]; expires_at: string | null; revoked_at: string | null }
+export interface DocGrantInput { subject_type: string; subject_id: string; actions: string[]; expires_at?: string }
+export interface DocTarget { type: string; id: string }
+export interface DocSavedSearch { id: string; name: string; params: Record<string, string | boolean> }
+
+export interface DocExternalRow { id: string; document: string; reference: string; direction: "INCOMING" | "OUTGOING"; party_type: string; party_name: string; sender: string; recipient: string; party_reference: string; received_on: string | null; sent_on: string | null; response_due_on: string | null; responded_on: string | null; submission_status: string; contract_ref: string; resubmission_of: string | null }
+export interface DocTransmittalRow { id: string; number: string; project: string | null; direction: string; party: string; purpose: string; sent_on: string; items: { document: string; reference: string; version: string }[] }
+export interface DocRfiRow { id: string; number: string; project: string; subject: string; question: string; raised_by: string; assigned_to: string; due_date: string | null; status: "OPEN" | "ANSWERED" | "CLOSED" | string; response: string }
+export interface DocCategoryInput { code: string; name: string; number_prefix: string; doc_type: string; number_padding: number; is_controlled: boolean; requires_expiry: boolean; review_interval_days: number | null; retention_years: number | null; default_classification?: string }
+export interface DocTransmittalInput { direction: string; party_name: string; purpose: string; project?: string; response_due_on?: string; notes?: string; items: { document: string }[] }
+export interface DocRfiInput { project: string; subject: string; question: string; assigned_to: string; due_date?: string; document?: string }
+
+// ---- Sales: amendments, billing plan, outstanding, credit, statement
+export interface OrderAmendment { id: string; order: string; status: "PENDING" | "APPROVED" | "REJECTED" | string; reason: string; changes: { quantities: Record<string, string>; add: { product?: string; quantity: string; description?: string; sku?: string }[] }; total_before: string; total_after: string | null; requested_by: string; decided_by: string | null; decision_note: string }
+export interface OrderMilestoneRow { id: string; description: string; percent: string; due_date: string | null; invoice: string | null }
+export interface OrderOutstandingRow { line: string; line_no: number; description: string; ordered: string; delivered: string; returned: string; invoiced: string; to_deliver: string; to_invoice: string; reserved: string; backordered: string }
+export interface AccountCredit { credit_status: string; credit_limit: string | null; receivables: string; open_orders: string; exposure: string; available_credit: string | null }
+export interface AccountStatement { account: string; customer: string; currency: string; from: string; to: string; opening_balance: string; closing_balance: string; lines: { date: string; type: string; reference: string; amount: string; balance: string; due: string | null }[] }
+
+export interface QuoteRevision { version: number; event: string; created_by: string | null; created_at: string; snapshot: unknown }
+export interface QuotationInput { account?: string; currency?: string; valid_until?: string | null; opportunity?: string | null; payment_terms?: string; delivery_terms?: string; terms?: string; notes?: string; expected_version?: number; lines: { product?: string; description?: string; quantity: string; unit_price?: string; discount_percent?: string }[] }
+
+export interface ProductBundle { product: string; items: { product: string; quantity: string }[] }
+
+export interface DocRequirement { doc_type: string; title: string; employment_type: string }
+export interface AttendanceDay { date: string; day_type: string; scheduled_hours: string; worked_hours: string; late_minutes: number; early_minutes: number; overtime_hours: string; status: string; work_mode: string | null; exceptions: string[] }
+export interface PerformanceAnalytics { reviews: number; completed: number; rating_distribution: Record<string, number> }
+export interface HeadcountStatusRow { department: string; status: string; count: number }
+
+export interface LeadDuplicates { leads: { id: string; name: string; company: string; status: string; matched_on: string }[]; accounts: { id: string; name: string }[] }
+export interface LeadImportResult { dry_run: boolean; valid: boolean; rows: number; errors: { row: number; errors: string[] }[]; created: number }
+export interface UpcomingDate { contact: string; name: string; label: string; date: string; remind_on: string }
+export interface CrossSellRow { product: string; name: string; peer_buyers: number; revenue: string }
+export interface OwnershipChange { from: string | null; to: string; by: string | null; reason: string; at: string }
+
+export interface ProcurementSettings { "procurement.match_tolerance_percent": number; "procurement.allow_two_way_match": boolean; "procurement.over_receipt_percent": number }
+export interface PreferredSupplier { supplier: string; supplier_id: string; unit_price: string; currency: string; lead_time_days: number | null; preferred: boolean }
+export interface SupplierPriceRow { supplier: string; unit_price: string; currency: string; valid_from: string; valid_to: string | null; lead_time_days: number | null }
+export interface ReturnsSummaryRow { supplier: string; returns: number; return_value: string; claims: number; claimed: string; accepted: string }
+
+export interface AccountWithBalance extends Account { balance: string }
+export interface LedgerReport { account: string; name: string; opening_balance: string; rows: { date: string; entry: string; description: string; debit: string; credit: string; balance: string }[]; closing_balance: string }
+export interface AcquisitionReportRow { number: string; asset: string; name: string; category: string; date: string; capitalized: boolean; total_cost: string; base_amount: string }
+export interface AppNotification { id: string; type: string; title: string; body: string; ref_type: string; ref_id: string; created_at: string; read: boolean }
+export interface NotificationPage { results: AppNotification[]; next: string | null; previous: string | null; unread_count: number }
+export interface NotificationPref { notification_type: string; in_app: boolean; email: boolean }
+export type TenantSettings = Record<string, string | number | boolean>
+export interface TenantModule { module: string; entitled: boolean; enabled: boolean }
+export interface TenantAuditEvent { id: string; created_at: string; action: string; actor_user_id: string | null; target_type: string; target_id: string; metadata: Record<string, unknown>; correlation_id: string }
+export interface OutboxEventRow { id: string; type: string; version: number; status: string; attempts: number; last_error: string; created_at: string; published_at: string | null }
+export interface OutboxPage extends Page<OutboxEventRow> { stats: { pending: number; dead: number; oldest_pending_age_seconds: number } }
+export interface ApproverRule { type: string; ref?: string }
+export interface WorkflowStageDef { order: number; name: string; policy: string; approvers: ApproverRule[]; min_amount: string | null; max_amount: string | null; due_hours: number | null; escalate_to_user_id: string | null }
+export interface WorkflowDefinitionRow { id: string; code: string; version: number; name: string; subject_type: string; is_active: boolean; separation_of_duties: boolean; distinct_approvers: boolean; stages: WorkflowStageDef[] }
+export interface CrmSegmentRow { segment: string; accounts: number }
+export interface SalesReportData { by_customer: { customer: string; currency: string; orders: number; total: string }[]; by_product: { sku: string; currency: string; quantity: string; revenue: string }[] }
+export interface SupplierSpendRow { supplier: string; currency: string; ordered: string; invoiced: string }
+export interface ProjectHealth { project: string; rag: "RED" | "AMBER" | "GREEN"; reasons: string[]; cpi: string | null; spi: string | null; percent_complete: string; overdue_tasks: number; open_risks: number; high_risks: number; open_issues: number; critical_issues: number; high_issues: number }
+export interface PortfolioProject { id: string; code: string; name: string; status: string; manager_id: string; start_on: string; end_on: string; rag: "RED" | "AMBER" | "GREEN" | null; reasons: string[]; percent_complete: string; margin?: string }
+export interface ProjectPortfolio { by_status: Record<string, number>; rag: { RED: number; AMBER: number; GREEN: number }; projects: PortfolioProject[] }
+export interface AccountSummaryData { account: string; currency: string; lifetime_value: string; orders: number; average_order_value: string; first_order: string | null; last_order: string | null; top_products: { product: string; revenue: string }[]; open_opportunities: number; open_cases: number; satisfaction: number | null }
+
+export interface AssetDocRow { id: string; type: string; title: string; file_id: string }

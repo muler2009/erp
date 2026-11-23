@@ -7,6 +7,7 @@ import { formatMoney } from "../../shared/lib/money";
 import { useAccess } from "../../shared/permissions/usePermissions";
 import { Badge, Button, Card, EmptyState, ErrorState, PageHeader, Spinner } from "../../shared/ui/primitives";
 import { ActionDialog } from "../hr/ActionDialog";
+import { ContractEditDialog } from "./ContractEdit";
 import { CONTRACT_STATUS } from "./ContractsPage";
 
 export const PARTY: Record<string, string> = { US: "Us", CUSTOMER: "The customer" };
@@ -23,7 +24,7 @@ export function ContractDetailPage() {
   const [act] = useSalesContractActionMutation();
   const [addOb] = useAddContractObligationMutation();
   const [doneOb] = useCompleteContractObligationMutation();
-  const [dlg, setDlg] = useState<"terminate" | "obligation" | null>(null);
+  const [dlg, setDlg] = useState<"terminate" | "obligation" | "edit" | null>(null);
   const [err, setErr] = useState<string | null>(null);
   if (q.isLoading) return <Spinner />;
   const c = q.data;
@@ -41,6 +42,7 @@ export function ContractDetailPage() {
       <p className="mb-2 text-sm"><Link className="text-blue-700 underline" to="/app/sales/contracts">← All contracts</Link></p>
       <PageHeader title={`${c.number || "Draft contract"} — ${c.title}`} description={`${c.start_date} → ${c.end_date} · version ${c.version}`}
         actions={<div className="flex items-center gap-2"><Badge tone={CONTRACT_STATUS[c.status].tone}>{CONTRACT_STATUS[c.status].label}</Badge>
+          {((editor && c.status === "DRAFT") || (approver && c.status === "ACTIVE")) && <Button variant="secondary" onClick={() => setDlg("edit")}>{c.status === "DRAFT" ? "Edit draft" : "Change wording"}</Button>}
           {approver && c.status === "DRAFT" && <Button onClick={() => void run("activate")}>Put in force</Button>}
           {approver && c.status === "ACTIVE" && <Button onClick={() => void run("renew")}>Renew</Button>}
           {approver && c.status === "ACTIVE" && <Button variant="danger" onClick={() => setDlg("terminate")}>End early</Button>}</div>} />
@@ -68,6 +70,7 @@ export function ContractDetailPage() {
       <Card title="History">
         {(hist.data ?? []).length === 0 ? <p className="text-sm text-slate-600">No changes recorded.</p> : <ul className="text-sm">{(hist.data ?? []).map((h) => <li key={`${h.version}-${h.event}`} className="border-t border-slate-100 py-1">Version {h.version}: {EVENT_TEXT[h.event] ?? h.event} on {h.created_at.slice(0, 10)}</li>)}</ul>}
       </Card>
+      {dlg === "edit" && <ContractEditDialog contract={c} onClose={() => setDlg(null)} />}
       {dlg === "terminate" && <ActionDialog title="End contract early" cta="End contract" open onClose={() => setDlg(null)} fields={[{ name: "reason", label: "Why is it ending?", required: true }]} submit={async (v) => { await act({ id, action: "terminate", reason: v.reason }).unwrap(); }} />}
       {dlg === "obligation" && <ActionDialog title="Add obligation" cta="Add" open onClose={() => setDlg(null)} fields={[{ name: "description", label: "What must happen", required: true }, { name: "due_date", label: "Due date", type: "date", required: true }, { name: "party", label: "Who must do it", options: [["US", "Us"], ["CUSTOMER", "The customer"]] }]} submit={async (v) => { await addOb({ id, description: v.description ?? "", due_date: v.due_date ?? "", party: v.party || "US" }).unwrap(); }} />}
     </div>
