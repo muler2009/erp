@@ -91,7 +91,7 @@ export function ContractsPage() {
     <div>
       <PageHeader title="Customer contracts" description="Agreed prices and terms with customers." actions={can("sales.quote.create") ? <Button onClick={() => setCreating(true)}>New contract</Button> : undefined} />
       <div className="mb-4 max-w-xs"><FormField label="Show" htmlFor="ct-filter"><select id="ct-filter" className={inputClass} value={status} onChange={(e) => setStatus(e.target.value)}><option value="">All contracts</option>{Object.entries(CONTRACT_STATUS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></FormField></div>
-      {q.isLoading ? <Spinner /> : q.isError ? <ErrorState error={new Error("Contracts could not be loaded.")} onRetry={() => void q.refetch()} /> : rows.length === 0 ? <EmptyState title="No contracts" hint="Create one to agree prices and terms with a customer." /> : (
+      {q.isLoading ? <Spinner /> : q.isError ? <ErrorState error={q.error ?? new Error("Contracts could not be loaded.")} onRetry={() => void q.refetch()} /> : rows.length === 0 ? <EmptyState title="No contracts" hint="Create one to agree prices and terms with a customer." /> : (
         <Card>
           <table className="w-full text-sm"><caption className="sr-only">Customer contracts</caption>
             <thead><tr className="text-left text-slate-500"><th>Number</th><th>Customer</th><th>Title</th><th>Period</th><th className="text-right">Committed</th><th>Status</th></tr></thead>

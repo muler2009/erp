@@ -159,7 +159,7 @@ export function OrderTools({ order }: { order: SalesOrder }) {
   const billed = (plan.data ?? []).some((m) => m.invoice);
   return (
     <div className="mt-4 border-t border-slate-200 pt-3">
-      <div role="tablist" aria-label="Order tools" className="mb-3 flex gap-2">{tabs.map(([k, l]) => <button key={k} role="tab" type="button" aria-selected={tab === k} onClick={() => setTab(k)} className={`rounded-md px-2 py-1 text-sm ${tab === k ? "bg-brand-600 text-white" : "bg-white ring-1 ring-slate-300"}`}>{l}</button>)}</div>
+      <div role="tablist" aria-label="Order tools" className="mb-3 flex flex-wrap gap-2">{tabs.map(([k, l]) => <button key={k} role="tab" type="button" aria-selected={tab === k} onClick={() => setTab(k)} className={`rounded-md px-2 py-1 text-sm ${tab === k ? "bg-brand-600 text-white" : "bg-white ring-1 ring-slate-300"}`}>{l}</button>)}</div>
       {err && <p role="alert" className="mb-2 text-sm text-red-700">{err}</p>}
       {note && <p role="status" className="mb-2 text-sm text-green-700">{note}</p>}
 

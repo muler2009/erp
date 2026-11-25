@@ -77,7 +77,7 @@ export function EmployeePage() {
         </div> : undefined} />
       <p className="mb-3"><Badge tone={statusTone(e.status)}>{pretty(e.status)}</Badge></p>
       {err && <p role="alert" className="mb-3 text-sm text-red-700">{err}</p>}
-      <div role="tablist" className="mb-4 flex gap-2 border-b border-slate-200">
+      <div role="tablist" className="mb-4 flex flex-wrap gap-2 border-b border-slate-200">
         {tabs.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={`px-3 py-2 text-sm ${tab === k ? "border-b-2 border-indigo-600 font-medium" : "text-slate-600"}`} onClick={() => setTab(k)}>{l}</button>)}
       </div>
 

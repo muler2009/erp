@@ -119,7 +119,7 @@ export function AttendanceAdminPage() {
   return (
     <>
       <PageHeader title="Attendance management" description="Corrections, overtime and attendance reports for the people you manage." />
-      <div role="tablist" className="mb-4 flex gap-2 border-b border-slate-200">
+      <div role="tablist" className="mb-4 flex flex-wrap gap-2 border-b border-slate-200">
         {tabs.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={`px-3 py-2 text-sm ${tab === k ? "border-b-2 border-indigo-600 font-medium" : "text-slate-600"}`} onClick={() => setTab(k)}>{l}</button>)}
       </div>
       {tab === "corrections" && <Corrections />}

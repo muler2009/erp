@@ -22,7 +22,7 @@ export function BackordersPage() {
     <div>
       <PageHeader title="Backorders" description="Items customers ordered that we could not ship yet." actions={can("sales.delivery.manage") ? <Button loading={isLoading} onClick={() => void run()}>Retry backorders</Button> : undefined} />
       {msg && <p role={msg.ok ? "status" : "alert"} className={`mb-3 text-sm ${msg.ok ? "text-green-700" : "text-red-700"}`}>{msg.text}</p>}
-      {q.isLoading ? <Spinner /> : q.isError ? <ErrorState error={new Error("Backorders could not be loaded.")} onRetry={() => void q.refetch()} /> : (q.data ?? []).length === 0 ? <EmptyState title="No backorders" hint="Everything ordered has been covered by stock." /> : (
+      {q.isLoading ? <Spinner /> : q.isError ? <ErrorState error={q.error ?? new Error("Backorders could not be loaded.")} onRetry={() => void q.refetch()} /> : (q.data ?? []).length === 0 ? <EmptyState title="No backorders" hint="Everything ordered has been covered by stock." /> : (
         <Card title="Waiting for stock">
           <table className="w-full text-sm"><caption className="sr-only">Backordered items</caption>
             <thead><tr className="text-left text-slate-500"><th>Order</th><th>Item</th><th className="text-right">Ordered</th><th className="text-right">Waiting</th><th>Since</th></tr></thead>

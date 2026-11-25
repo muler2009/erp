@@ -7,7 +7,7 @@ from rest_framework.views import APIView
 from modules.procurement import models as m
 from modules.procurement import orders_ext as ox
 from platform_core.authorization.permissions import require
-from shared.api.errors import DomainError
+from shared.api.errors import DomainError, iso_date
 
 
 def perm(code):
@@ -85,7 +85,7 @@ class Blankets(APIView):
 
     def post(self, request):
         b = request.data
-        o = ox.create_blanket(request.user.id, supplier_id=b.get("supplier"), currency=b.get("currency", ""), order_date=_d(b.get("order_date")) or date.today(), valid_to=_d(b.get("valid_to")), lines=b.get("lines") or [], budget_id=b.get("budget"))
+        o = ox.create_blanket(request.user.id, supplier_id=b.get("supplier"), currency=b.get("currency", ""), order_date=iso_date(b.get("order_date"), "order_date") or date.today(), valid_to=iso_date(b.get("valid_to"), "valid_to", required=True), lines=b.get("lines") or [], budget_id=b.get("budget"))
         return Response({"id": str(o.id), "number": o.number, "status": o.status}, status=201)
 
 

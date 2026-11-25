@@ -223,7 +223,7 @@ export function RisksPage() {
   return (
     <>
       <PageHeader title="Supply risks" description="Risks, disruptions and sourcing resilience." />
-      <div role="tablist" className="mb-3 flex gap-2">{TABS.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={`rounded-md px-3 py-1.5 text-sm ${tab === k ? "bg-indigo-600 text-white" : "border border-slate-300 bg-white"}`}>{l}</button>)}</div>
+      <div role="tablist" className="mb-3 flex flex-wrap gap-2">{TABS.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={`rounded-md px-3 py-1.5 text-sm ${tab === k ? "bg-indigo-600 text-white" : "border border-slate-300 bg-white"}`}>{l}</button>)}</div>
       {tab === "risks" && <Risks />}
       {tab === "disruptions" && <Disruptions />}
       {tab === "critical" && <Critical />}

@@ -23,6 +23,8 @@ ZERO = core.ZERO
 # ----------------------------------------------------------------------------- grades and headcount plans
 @transaction.atomic
 def create_grade(actor_id, *, code, name, min_salary=0, max_salary=0):
+    from shared.api.errors import require_text
+    code, name = require_text(code, "code"), require_text(name, "name")
     lo, hi = _dec(min_salary, "min_salary"), _dec(max_salary, "max_salary")
     if lo < 0 or hi < lo:
         raise ValidationFailed("The salary band must be non-negative and ordered.", code="invalid_band")
@@ -291,6 +293,8 @@ def add_document(actor_id, employee_id, *, doc_type, title, filename, data, expi
 
 @transaction.atomic
 def set_document_requirement(actor_id, *, doc_type, title, employment_type=""):
+    from shared.api.errors import require_text
+    doc_type, title = require_text(doc_type, "doc_type"), require_text(title, "title")
     if employment_type and employment_type not in m.Employee.EmploymentType.values:
         raise ValidationFailed("Invalid employment type.", code="invalid_employment_type")
     r, _ = m.DocumentRequirement.objects.update_or_create(doc_type=doc_type, employment_type=employment_type, defaults={"title": title})

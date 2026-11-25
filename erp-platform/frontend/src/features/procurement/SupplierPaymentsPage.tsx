@@ -165,7 +165,7 @@ export function SupplierPaymentsPage() {
   return (
     <>
       <PageHeader title="Supplier payments" description="Pay posted supplier invoices, review ageing and withholding tax." />
-      <div role="tablist" aria-label="Supplier payment views" className="mb-4 flex gap-2">
+      <div role="tablist" aria-label="Supplier payment views" className="mb-4 flex flex-wrap gap-2">
         {TABS.map((t) => <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)} className={`rounded px-3 py-1 text-sm ${tab === t.id ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-800"}`}>{t.label}</button>)}
       </div>
       {tab === "due" && <DueSection />}

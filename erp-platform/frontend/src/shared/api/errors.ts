@@ -39,7 +39,9 @@ export function isApiError(value: unknown): value is ApiError {
 }
 
 export function errorMessage(value: unknown): string {
-  return isApiError(value) ? value.message : "Something went wrong.";
+  if (isApiError(value)) return value.message;
+  if (value instanceof Error && value.message) return value.message;
+  return "Something went wrong.";
 }
 
 /** Field errors keyed by field name, for forms. */

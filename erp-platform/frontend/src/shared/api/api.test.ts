@@ -32,6 +32,10 @@ describe("error normalization", () => {
     expect(e.status).toBe(502);
     expect(errorMessage(e).length).toBeGreaterThan(0);
   });
+  it("reads the message of a plain Error and falls back for anything else", () => {
+    expect(errorMessage(new Error("The report could not be loaded."))).toBe("The report could not be loaded.");
+    expect(errorMessage(undefined)).toBe("Something went wrong.");
+  });
   it("copes with network errors", () => {
     expect(errorMessage(toApiError("FETCH_ERROR", undefined)).length).toBeGreaterThan(0);
   });

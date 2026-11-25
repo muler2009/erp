@@ -108,6 +108,8 @@ def update_category(actor_id, category_id, **attrs):
 
 @transaction.atomic
 def create_location(actor_id, *, code, name, parent_id=None, branch_id=None, address=""):
+    from shared.api.errors import require_text
+    code, name = require_text(code, "code"), require_text(name, "name")
     if m.AssetLocation.objects.filter(code=code).exists():
         raise DomainError("A location with this code already exists.", code="code_taken")
     if parent_id and not m.AssetLocation.objects.filter(pk=parent_id).exists():

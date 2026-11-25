@@ -100,7 +100,7 @@ export function ReceivingPage() {
   return (
     <div>
       <PageHeader title="Receiving" description="Goods that arrived from suppliers, and checking them." />
-      <div role="tablist" className="mb-4 flex border-b border-slate-200">{tabs.map(([k, l]) => <button key={k} role="tab" aria-selected={k === tab} onClick={() => setTab(k)} className={`px-3 py-2 text-sm ${k === tab ? "border-b-2 border-indigo-600 font-medium text-indigo-700" : "text-slate-600 hover:text-slate-900"}`}>{l}</button>)}</div>
+      <div role="tablist" className="mb-4 flex flex-wrap border-b border-slate-200">{tabs.map(([k, l]) => <button key={k} role="tab" aria-selected={k === tab} onClick={() => setTab(k)} className={`px-3 py-2 text-sm ${k === tab ? "border-b-2 border-indigo-600 font-medium text-indigo-700" : "text-slate-600 hover:text-slate-900"}`}>{l}</button>)}</div>
       {tab === "inspections" ? <Inspections /> : <Receipts />}
     </div>
   );

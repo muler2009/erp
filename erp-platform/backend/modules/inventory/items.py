@@ -100,6 +100,8 @@ def convert(quantity, from_uom, to_uom, *, product_id=None):
 
 @transaction.atomic
 def save_category(actor_id, *, code, name, parent_id=None, category_id=None):
+    from shared.api.errors import require_text
+    code, name = require_text(code, "code"), require_text(name, "name")
     parent = None
     if parent_id:
         parent = m.ItemCategory.objects.filter(pk=parent_id).first()

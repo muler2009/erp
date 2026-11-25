@@ -139,7 +139,7 @@ export function StockControlPage() {
   return (
     <>
       <PageHeader title="Stock control" description="What needs attention: shortages, reordering, ageing, slow movers and expired lots." />
-      <div role="tablist" className="mb-4 flex gap-2">{TABS.map(([k, label]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={`rounded-md px-3 py-1.5 text-sm ${tab === k ? "bg-indigo-600 text-white" : "border border-slate-300 bg-white"}`}>{label}</button>)}</div>
+      <div role="tablist" className="mb-4 flex flex-wrap gap-2">{TABS.map(([k, label]) => <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={`rounded-md px-3 py-1.5 text-sm ${tab === k ? "bg-indigo-600 text-white" : "border border-slate-300 bg-white"}`}>{label}</button>)}</div>
       <Body />
     </>
   );

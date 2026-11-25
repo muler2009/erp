@@ -84,7 +84,7 @@ export function PaySetupPage() {
   return (
     <>
       <PageHeader title="Pay setup" description="Allowance and deduction components, and income tax brackets." />
-      <div role="tablist" className="mb-4 flex gap-2 border-b border-slate-200">
+      <div role="tablist" className="mb-4 flex flex-wrap gap-2 border-b border-slate-200">
         {([["components", "Components"], ["brackets", "Tax brackets"]] as const).map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={`px-3 py-2 text-sm ${tab === k ? "border-b-2 border-indigo-600 font-medium" : "text-slate-600"}`} onClick={() => setTab(k)}>{l}</button>)}
       </div>
       {tab === "components" ? <Components /> : <Brackets />}

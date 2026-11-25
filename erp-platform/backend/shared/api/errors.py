@@ -24,6 +24,29 @@ class ValidationFailed(DomainError):
     default_code = "validation_error"
 
 
+def iso_date(value, field, *, required=False):
+    """Parse an ISO date from a request body; a missing or malformed value is a 400, never a 500."""
+    from datetime import date
+
+    if value in (None, ""):
+        if required:
+            raise ValidationFailed(f"{field} is required.", code="required")
+        return None
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value))
+    except ValueError:
+        raise ValidationFailed(f"{field} must be a date (YYYY-MM-DD).", code="invalid_date")
+
+
+def require_text(value, field):
+    """A required free-text field must be a non-blank string."""
+    if not isinstance(value, str) or not value.strip():
+        raise ValidationFailed(f"{field} is required.", code="required")
+    return value.strip()
+
+
 def _flatten(detail, prefix=""):
     items = []
     if isinstance(detail, dict):

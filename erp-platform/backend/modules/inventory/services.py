@@ -89,6 +89,8 @@ def update_product(actor_id, product_id, *, name=None, barcode=None, category=No
 @transaction.atomic
 def create_warehouse(actor_id, *, code, name, **attrs):
     from modules.inventory import structure
+    from shared.api.errors import require_text
+    code, name = require_text(code, "code"), require_text(name, "name")
     if m.Warehouse.objects.filter(code=code).exists():
         raise DomainError("A warehouse with this code already exists.", code="code_taken")
     return m.Warehouse.objects.create(code=code, name=name, **structure.clean_warehouse(attrs))

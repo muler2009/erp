@@ -1,4 +1,4 @@
-# Completion audit — 2026-11-23 (after frontend slice 113)
+# Completion audit — 2026-11-24 (after frontend slice 114)
 
 Replaces the 2026-11-22 audit (slice 102), which listed foundation gaps that are now built.
 
@@ -18,16 +18,16 @@ Every `path(...)` in `backend/config/urls_tenant.py` (about 600 routes) was comp
 - Asset documents can be attached and downloaded but not removed (the backend has no delete route).
 
 ## Cross-cutting items still open
-1. **No screen has been driven in a real browser** since the earliest slices (setup in `e2e-local.md`). Print layout, file downloads and new-tab opening are only tested with jsdom. This is the biggest unverified risk.
+1. **Real-browser pass done on 2026-11-24 (slice 114):** all 181 static routes load, downloads (CSV/XLSX/PDF) and new-tab opening work, phone-width overflow fixed. Still unverified: print layout of server-rendered documents, the 37 routes that need a record id, real data volumes, other browsers.
 2. **Deployed-stack hardening:** rate-limit, upload and import abuse tests exist only as backend tests, not repeated against a running stack.
 3. **Bundle** about 550 kB, no route-level code splitting.
 4. **Backend regression** should be re-run before any release.
 5. Keycloak outgoing mail is not configured in the dev setup.
 
 ## Recommended order
-1. Real-browser pass per module (the only way to find layout, download and navigation faults).
+1. Seed realistic data and walk the id routes and main workflows in the browser.
 2. Route-level code splitting.
 3. Backend regression re-run and deployed-stack hardening checks.
 
 ## Verdict
-The platform is **not finalized**. Backend: complete for all 14 modules with a passing regression (as of slice 102). Frontend: every confirmed backend route has a working, tested screen, but nothing has been verified in a real browser or against a deployed stack.
+The platform is **not finalized**. Backend: complete for all 14 modules with a passing regression (as of slice 102). Frontend: every confirmed backend route has a working, tested screen, but only the route walk, downloads and phone layout have been checked in a real browser, and nothing against a deployed stack.

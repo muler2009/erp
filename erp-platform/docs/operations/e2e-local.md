@@ -19,3 +19,12 @@ frontend, and a headless Chromium signing in through the browser (authorization 
    failed API calls.
 
 `*.localhost` resolves to the loopback address in Chromium, so no hosts-file edits are needed.
+
+## Real-browser pass of 2026-11-24 (slice 114)
+Run against real Keycloak 26.0.7, the Django backend with a provisioned tenant (`beta`), the Vite frontend and Chromium.
+Extra scripts next to `smoke.py` (same `E2E_USER` / `E2E_PASSWORD`):
+- `smoke.py` — `routes.txt` now lists all 181 static `/app` routes. Walk in batches of 15 (`0 15`, `15 30`, ...).
+- `downloads.py` — runs a report and downloads CSV, Excel and PDF, printing the file name, size and first bytes.
+- `new_tab.py` — drives the app's own `openFromApi` to open an authorised HTML page in a new tab.
+- `mobile_overflow.py START END` — loads routes at 390 px width and reports horizontal overflow.
+Notes: the tenant admin's Keycloak password was set with `kcadm.sh set-password`; the setup email step fails (no mail server) and the job ends SUCCEEDED_WITH_WARNINGS, which is expected locally.

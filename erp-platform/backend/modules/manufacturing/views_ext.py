@@ -126,8 +126,9 @@ class Plans(APIView):
 
     def post(self, request):
         b = request.data
-        lines = [{**ln, "required_date": _d(ln.get("required_date"))} for ln in b.get("lines") or []]
-        return Response(_plan(pl.create_plan(request.user.id, name=b.get("name"), period_start=_d(b.get("period_start")), period_end=_d(b.get("period_end")), lines=lines), True), status=201)
+        from shared.api.errors import iso_date, require_text
+        lines = [{**ln, "required_date": iso_date(ln.get("required_date"), "required_date")} for ln in b.get("lines") or []]
+        return Response(_plan(pl.create_plan(request.user.id, name=require_text(b.get("name"), "name"), period_start=iso_date(b.get("period_start"), "period_start", required=True), period_end=iso_date(b.get("period_end"), "period_end", required=True), lines=lines), True), status=201)
 
 
 class PlanDetail(APIView):

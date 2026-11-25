@@ -41,7 +41,7 @@ function CompanyForm({ company, canEdit }: { company: Company; canEdit: boolean 
         </select>
       </FormField>
       <fieldset className="mb-3"><legend className="mb-1 text-sm font-medium">Working days</legend>
-        <div className="flex gap-3">{DAYS.map(([n, l]) => (
+        <div className="flex flex-wrap gap-3">{DAYS.map(([n, l]) => (
           <label key={n} className="flex items-center gap-1 text-sm"><input type="checkbox" disabled={!canEdit} checked={days.includes(n)} onChange={(e) => setDays(e.target.checked ? [...days, n].sort() : days.filter((d) => d !== n))} />{l}</label>
         ))}</div>
       </fieldset>

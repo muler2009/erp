@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from modules.procurement import contracts as ct
 from modules.procurement import models as m
 from platform_core.authorization.permissions import require
-from shared.api.errors import DomainError
+from shared.api.errors import DomainError, iso_date
 
 
 def perm(code):
@@ -31,8 +31,16 @@ class Contracts(APIView):
 
     def post(self, request):
         b = request.data
-        c = ct.create(request.user.id, supplier_id=b.get("supplier"), title=b.get("title", ""), start_date=date.fromisoformat(b["start_date"]), end_date=date.fromisoformat(b["end_date"]), currency=b.get("currency", ""), prices=b.get("prices") or [], value_limit=b.get("value_limit"), payment_terms=b.get("payment_terms", ""), terms_text=b.get("terms_text", ""), auto_renew=bool(b.get("auto_renew")), renewal_notice_days=int(b.get("renewal_notice_days", 60)))
+        c = ct.create(request.user.id, supplier_id=b.get("supplier"), title=b.get("title", ""), start_date=iso_date(b.get("start_date"), "start_date", required=True), end_date=iso_date(b.get("end_date"), "end_date", required=True), currency=b.get("currency", ""), prices=b.get("prices") or [], value_limit=b.get("value_limit"), payment_terms=b.get("payment_terms", ""), terms_text=b.get("terms_text", ""), auto_renew=bool(b.get("auto_renew")), renewal_notice_days=_int(b.get("renewal_notice_days", 60), "renewal_notice_days"))
         return Response(_row(c), status=201)
+
+
+def _int(value, field):
+    from shared.api.errors import ValidationFailed
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise ValidationFailed(f"{field} must be a whole number.", code="invalid_number")
 
 
 class ContractDetail(APIView):

@@ -1126,3 +1126,27 @@ New: a "Documents" card on the asset page. It lists the invoices, manuals, certi
 Limit: the backend has no remove route, so attached documents cannot be removed.
 `docs/operations/completion-audit.md` rewritten: all previously confirmed route gaps are built; the remaining open items are the real-browser pass, deployed-stack hardening, bundle splitting and a backend regression re-run.
 Backend: no changes. Tests: 3 new; full suite 1107 tests / 119 files passing; tsc clean; build ok; audit 0 vulnerabilities.
+
+## F114 — Real-browser pass (slice 114)
+
+What was run (first time since the earliest slices): real Keycloak sign-in (authorization code + PKCE), backend with a provisioned tenant, Vite, headless Chromium.
+- **Route walk:** all 181 static `/app` routes loaded as the tenant admin. No page errors. 12 routes timed out during the walk; each loaded cleanly when opened alone, so these were load effects of the single-threaded dev server, not app faults.
+- **Downloads:** a report downloaded as CSV (UTF-8 with byte-order mark), XLSX (valid zip) and PDF (`%PDF-1.4`) through the real browser.
+- **New tab:** the app's `openFromApi` opened an authorised HTML page in a new tab with the bearer token sent and the opener severed.
+- **Phone width (390 px):** 4 pages overflowed horizontally. Cause: tab bars and the working-days row could not wrap. Fixed in 24 tab bars plus the company page; all four pages re-checked at 390 px, no overflow. A source-level test now requires every tab bar to wrap.
+- **Error text bug:** four sales pages (aging, contracts, contract detail, backorders) showed "Something went wrong." instead of the server's reason (for example "Set the company's base currency before using finance."). `errorMessage` now reads plain `Error` objects and those pages pass the server error. New tests for both.
+Not verified: print layout of the server-rendered documents (only that they open), dynamic routes with an id (37 of them, no data seeded), real data volumes, other browsers, Keycloak outgoing email.
+Observed, left as is: an admin without an employee record gets a 404 `no_employee_record` from `hr/me` on the self-service HR pages; the pages render without an alert.
+Backend: no changes.
+Tests: 3 new (error text, aging reason, tab-bar wrapping); full suite 1110 tests / 121 files passing; tsc clean.
+
+## F115 — Bad-input hardening found by probing (slice 115)
+
+What was run: an empty-body POST against all 295 collection endpoints of a live tenant, to see which ones fail badly.
+Found and fixed (backend):
+- **Four endpoints returned a server error (500) on a missing or malformed date:** manufacturing plans, blanket orders, supplier contracts, sales contracts. They now answer 400 with the field named (`required` or `invalid_date`). A shared helper `iso_date` in `shared/api/errors.py` does this; `require_text` rejects blank text.
+- **Five endpoints created a blank record when code or name was missing:** warehouses, item categories, asset locations, job grades, document requirements. They now answer 400.
+Re-probed against the live server: every one of the nine endpoints returns 400 on an empty or malformed body and 201 on a valid one.
+Frontend: no changes.
+Tests: new `backend/tests/test_input_validation.py` (6 tests). Related backend files re-run (manufacturing, inventory structure and items, HR lifecycle, assets, procurement and sales contracts/orders/pricing, plus the new file): 77 passed, 0 failed. The full backend regression (about 25 min) was NOT re-run.
+Not done: the walk with realistic seeded data (37 id routes and the main flows) — still open.

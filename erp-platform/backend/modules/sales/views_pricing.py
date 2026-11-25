@@ -273,6 +273,9 @@ class Contracts(APIView):
     def post(self, request):
         b = request.data
         kw = _contract_kwargs(b)
+        for k in ("start_date", "end_date"):
+            if not kw.get(k):
+                raise ValidationFailed(f"{k} is required.", code="required")
         c = contracts.create(request.user.id, account_id=b.get("account"), currency=b.get("currency", ""), items=b.get("items") or [], **kw)
         return Response(_contract(c, True), status=201)
 

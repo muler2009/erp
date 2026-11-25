@@ -151,7 +151,7 @@ export function TeamsPage() {
   return (
     <>
       <PageHeader title="Sales teams" description="Who sells, who covers which territory, and who owns what." />
-      <div role="tablist" aria-label="Sales organisation" className="mb-4 flex gap-1 border-b border-slate-200">
+      <div role="tablist" aria-label="Sales organisation" className="mb-4 flex flex-wrap gap-1 border-b border-slate-200">
         {TABS.map((t) => <button key={t} role="tab" aria-selected={t === tab} onClick={() => setTab(t)} className={`px-3 py-2 text-sm ${t === tab ? "border-b-2 border-indigo-600 font-medium text-indigo-700" : "text-slate-600 hover:text-slate-900"}`}>{t}</button>)}
       </div>
       <Card title={tab}>

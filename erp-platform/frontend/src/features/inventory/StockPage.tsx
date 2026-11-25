@@ -133,7 +133,7 @@ export function StockPage() {
   return (
     <>
       <PageHeader title="Stock" description="Quantities by location, and every movement that produced them." actions={canMove ? <Button onClick={() => setOpen(true)}>Record movement</Button> : undefined} />
-      <div role="tablist" aria-label="Stock views" className="mb-4 flex gap-2">
+      <div role="tablist" aria-label="Stock views" className="mb-4 flex flex-wrap gap-2">
         {(["levels", "movements"] as const).map((t) => (
           <button key={t} role="tab" type="button" aria-selected={tab === t} onClick={() => setTab(t)} className={`rounded-md px-3 py-1.5 text-sm ${tab === t ? "bg-brand-600 text-white" : "bg-white text-slate-700 ring-1 ring-slate-300"}`}>{t === "levels" ? "Stock on hand" : "Movement history"}</button>
         ))}

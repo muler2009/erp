@@ -108,7 +108,7 @@ export function WorkTimePage() {
   return (
     <>
       <PageHeader title="Work time setup" description="Work schedules and the overtime policy." />
-      <div role="tablist" className="mb-4 flex gap-2 border-b border-slate-200">
+      <div role="tablist" className="mb-4 flex flex-wrap gap-2 border-b border-slate-200">
         {([["schedules", "Schedules"], ["policy", "Overtime policy"]] as const).map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={`px-3 py-2 text-sm ${tab === k ? "border-b-2 border-indigo-600 font-medium" : "text-slate-600"}`} onClick={() => setTab(k)}>{l}</button>)}
       </div>
       {tab === "schedules" ? <Schedules /> : <Policy />}

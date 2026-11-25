@@ -132,7 +132,7 @@ export function DisposalsPage() {
   return (
     <>
       <PageHeader title="Asset disposals" description="Sell, scrap, donate or write off assets with approval, and keep the certificate." />
-      <div role="tablist" className="mb-4 flex gap-2 border-b border-slate-200">
+      <div role="tablist" className="mb-4 flex flex-wrap gap-2 border-b border-slate-200">
         {([["list", "Disposals"], ["report", "Report"]] as const).map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={`px-3 py-2 text-sm ${tab === k ? "border-b-2 border-slate-900 font-semibold" : "text-slate-600"}`} onClick={() => setTab(k)}>{l}</button>)}
       </div>
       {tab === "list" ? <List /> : <Report />}

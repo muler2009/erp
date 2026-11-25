@@ -28,7 +28,7 @@ export function ContractDetailPage() {
   const [err, setErr] = useState<string | null>(null);
   if (q.isLoading) return <Spinner />;
   const c = q.data;
-  if (q.isError || !c) return <ErrorState error={new Error("This contract could not be loaded.")} onRetry={() => void q.refetch()} />;
+  if (q.isError || !c) return <ErrorState error={q.error ?? new Error("This contract could not be loaded.")} onRetry={() => void q.refetch()} />;
   const prod = (pid: string) => { const p = products.data?.results.find((x) => x.id === pid); return p ? `${p.sku} — ${p.name}` : "Product"; };
   const run = async (action: "activate" | "renew") => {
     setErr(null);
